@@ -26,8 +26,10 @@ pub mod cutoff;
 pub mod digest;
 pub mod fuse;
 pub mod index;
+pub mod space;
 pub mod thresholds;
 
 pub use digest::{Digest, Luma, Sameness, digest, hamming64, hamming256, sameness};
 pub use fuse::rrf;
 pub use index::{Hit, Index};
+pub use space::Space;
