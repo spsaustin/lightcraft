@@ -36,6 +36,7 @@ lightcraft-fetch = { path = "crates/fetch" }
 lightcraft-heif = { path = "crates/heif" }
 lightcraft-segment = { path = "crates/segment" }
 lightcraft-vera = { path = "crates/vera" }
+lightcraft-embed = { path = "crates/embed" }
 
 # foundation
 thiserror = "2"
