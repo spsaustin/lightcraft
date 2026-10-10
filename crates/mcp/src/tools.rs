@@ -148,9 +148,39 @@ pub fn helper_tools(has_ui: bool) -> Vec<Value> {
                 "destination": {"type": "string", "description": "Copy or move: destination folder"},
                 "organize": {"type": "string", "description": "Copy or move: folders inside the destination — date (YYYY/YYYY-MM-DD, default), month (YYYY/YYYY-MM), flat, or a folder template such as {date:%Y}/{date:%Y%m%d} (→ 2026/20260114; the template's / make the levels, tokens as for rename; relative, no ..). Dated by capture time, else the import time"},
                 "onDeleted": {"type": "string", "enum": ["skip", "restore", "fresh"], "description": "A file that is in Recently Deleted: skip (default) = leave it there (the duplicate is reported with existingDeleted); restore = bring the photo back with its edits (`restored` lists it); fresh = delete the trashed record and import the file as a new photo"},
-                "rename": {"type": "string", "description": "Copy or move: file-name template, e.g. {date:%Y%m%d_%H%M%S}_{seq:3} (run_command photo.renameTokens lists the tags); the extension is kept"}
+                "rename": {"type": "string", "description": "Copy or move: file-name template, e.g. {date:%Y%m%d_%H%M%S}_{seq:3} (run_command photo.renameTokens lists the tags); the extension is kept"},
+                "onNearDuplicate": {"type": "string", "enum": ["stack", "import", "skip"], "description": "A file the import review found to be the same picture as a library photo (a resize, a re-export): stack (default) = import it and stack it under that photo (`stacked` lists them); import = import it like any other; skip = leave it out (listed in `duplicates` with reason `picture`). Only files reviewed first (library.importPreview) are checked"}
             }),
             &["paths"],
+        ),
+        tool(
+            "search_text",
+            "Search photos by words",
+            "Search the library by words, best match first. The keyword lane matches title, keywords (every level), caption, alt text, description, file name, camera, lens and place, with prefix matching (each word is a prefix; any word may match). Each result row carries `lane` (which lane found the photo) and the result carries `cutoff` (the noise ceiling applied; null for the keyword lane), so you can explain why a photo is listed. With `filter` (default true) the library view is also filtered to the results in rank order (sort: relevance; clear the filter to go back); a search that finds nothing leaves the view alone. Returns {photos: [{id, score, lane}], cutoff, lanes, filtered}.",
+            json!({
+                "query": {"type": "string", "description": "Words to look for (at most 2000 characters)"},
+                "limit": {"type": "integer", "description": "Most results to return (default 200, max 10000)"},
+                "filter": {"type": "boolean", "description": "Also filter the library view to the results in rank order (default true)"}
+            }),
+            &["query"],
+        ),
+        tool(
+            "photo_duplicates",
+            "Find the same picture",
+            "Find the photos that are the same picture as one photo, in three tiers: `bytes` (the same file content), `picture` (the same picture by fingerprint: a resize, a re-export) and `possible` (a variant edit, a burst neighbour). Each row carries `pdq` (differing bits of 256) and `phash` (of 64). Virtual copies, and pairs the user set apart with photo.ignorePair, are left out. `pendingDigests` says how many photos are not fingerprinted yet (they cannot be compared until they are). Returns {id, photos: [{id, tier, pdq, phash}], ignored, digested, pendingDigests}, rows by tier then distance. With `filter` the library view shows the photo and its duplicates.",
+            json!({
+                "id": {"type": "integer", "description": "Photo id (default: the active photo)"},
+                "limit": {"type": "integer", "description": "Most rows to return (default 50, max 10000)"},
+                "filter": {"type": "boolean", "description": "Also filter the library view to the photo and its duplicates (default false)"}
+            }),
+            &[],
+        ),
+        tool(
+            "vera_status",
+            "Search and duplicate lanes",
+            "Which search and duplicate lanes are live: `keyword`, `digest`, `vector` and `describe`, each with a reason when it is not running, plus the fingerprint counts (digested, photos, pendingDigests, unreadable, digests, indexDocs, ignoredPairs) and the sidecar file. Check this before explaining a search or duplicate result.",
+            json!({}),
+            &[],
         ),
         tool(
             "query_photos",
@@ -376,10 +406,14 @@ fn annotations(name: &str, title: &str) -> Value {
             | "list_widgets"
             | "ui_inspect"
             | "ui_screenshot"
+            | "vera_status"
     );
     let files = matches!(name, "export" | "render_photo" | "screenshot");
-    json!({"title": title, "readOnlyHint": read_only, "destructiveHint": !read_only && !files,
-        "idempotentHint": read_only || matches!(name, "render_photo" | "screenshot"), "openWorldHint": false})
+    // Like `select_photos`, these can change the view (their `filter` argument), so they are not
+    // read-only; unlike it they never edit or delete anything, and repeating one changes nothing more.
+    let view = matches!(name, "search_text" | "photo_duplicates");
+    json!({"title": title, "readOnlyHint": read_only, "destructiveHint": !read_only && !files && !view,
+        "idempotentHint": read_only || view || matches!(name, "render_photo" | "screenshot"), "openWorldHint": false})
 }
 
 /// Helpers have fixed keys; generated command tools retain the registry's free-form params.
@@ -632,7 +666,7 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> ToolResult {
                 return ToolResult::error(format!("no photos found in {paths:?}"));
             }
             let mut p = json!({"paths": files});
-            for k in ["album", "mode", "destination", "organize", "rename", "onDeleted"] {
+            for k in ["album", "mode", "destination", "organize", "rename", "onDeleted", "onNearDuplicate"] {
                 if let Some(v) = args.get(k).filter(|v| !v.is_null()) {
                     p[k] = v.clone();
                 }
@@ -644,6 +678,11 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> ToolResult {
                 r
             }))
         }
+        // a `query` of the wrong type is forwarded: the engine says what it must be
+        "search_text" if args.get("query").is_none_or(Value::is_null) => ToolResult::error("missing `query`"),
+        "search_text" => ToolResult::from(exec(b, "search.text", obj(args, &["query", "limit", "filter"]))),
+        "photo_duplicates" => ToolResult::from(exec(b, "photo.duplicates", obj(args, &["id", "limit", "filter"]))),
+        "vera_status" => ToolResult::from(exec(b, "vera.status", json!({}))),
         "query_photos" => ToolResult::from(exec(b, "catalog.query", obj(args, &["filter", "sort", "offset", "limit"]))),
         "select_photos" => {
             let mut p = obj(args, &["ids", "active", "mode"]);

@@ -399,3 +399,84 @@ fn the_clipboard_tool_cuts_copies_and_pastes_in_the_app() {
     assert!(!r.is_error, "{r:?}");
     assert_eq!(b.0, vec![("ui.clipboard".to_string(), json!({"action": "paste", "text": "travel"}))]);
 }
+
+/// The search and duplicate helpers are listed, `import` forwards `onNearDuplicate`, and the
+/// helpers reject keys they do not have.
+#[test]
+fn vera_tools_are_listed_with_their_arguments() {
+    let mut s = server();
+    let list = rpc(&mut s, 1, "tools/list", json!({}));
+    let tools = list["result"]["tools"].as_array().unwrap();
+    for name in ["search_text", "photo_duplicates", "vera_status"] {
+        assert!(tools.iter().any(|t| t["name"] == name), "missing {name}");
+    }
+    let tool = |n: &str| tools.iter().find(|t| t["name"] == n).unwrap();
+    assert_eq!(tool("search_text")["inputSchema"]["required"], json!(["query"]));
+    assert_eq!(tool("vera_status")["annotations"]["readOnlyHint"], true);
+    assert_eq!(tool("search_text")["annotations"]["readOnlyHint"], false, "filter changes the view, as select_photos does");
+    assert_eq!(tool("photo_duplicates")["annotations"]["readOnlyHint"], false);
+    let n = &tool("import")["inputSchema"]["properties"]["onNearDuplicate"];
+    assert_eq!(n["enum"], json!(["stack", "import", "skip"]));
+    for (name, args) in [
+        ("search_text", json!({"query": "x", "misspelled": 1})),
+        ("photo_duplicates", json!({"misspelled": 1})),
+        ("vera_status", json!({"misspelled": 1})),
+    ] {
+        let r = rpc(&mut s, 2, "tools/call", json!({"name": name, "arguments": args}));
+        assert_eq!(r["error"]["code"], -32602, "{r}");
+        assert!(r["error"]["message"].as_str().unwrap().contains("misspelled"), "{r}");
+    }
+}
+
+#[test]
+fn vera_status_reports_the_lanes() {
+    let mut b = Headless::demo();
+    let r = call_tool(&mut b, "vera_status", &json!({}));
+    assert!(!r.is_error, "{r:?}");
+    let v = r.structured.unwrap();
+    assert_eq!(v["lanes"]["keyword"], "live");
+    assert!(v["photos"].as_u64().unwrap() > 0, "{v}");
+    assert!(v["lanes"]["vector"]["state"].is_string(), "{v}");
+}
+
+#[test]
+fn search_text_finds_a_titled_photo_first() {
+    let mut b = Headless::demo();
+    let first = b.session.visible_cloned()[0];
+    let r = call_tool(&mut b, "run_command", &json!({"command": "library.select", "params": {"ids": [first.0]}}));
+    assert!(!r.is_error, "{r:?}");
+    let r = call_tool(&mut b, "run_command", &json!({"command": "photo.setMeta", "params": {"title": "Zanzibar harbour"}}));
+    assert!(!r.is_error, "{r:?}");
+    let r = call_tool(&mut b, "search_text", &json!({"query": "zanzi"}));
+    assert!(!r.is_error, "{r:?}");
+    let v = r.structured.unwrap();
+    assert_eq!(v["photos"][0]["id"], first.0, "{v}");
+    assert_eq!(v["photos"][0]["lane"], "keyword");
+    assert!(v["cutoff"].is_null());
+    assert_eq!(v["filtered"], true);
+    assert_eq!(b.session.visible_cloned(), vec![first], "the view shows the results");
+    // `filter: false` leaves the view alone
+    let _ = call_tool(&mut b, "run_command", &json!({"command": "library.clearFilter"}));
+    let r = call_tool(&mut b, "search_text", &json!({"query": "zanzi", "limit": 1, "filter": false}));
+    assert_eq!(r.structured.unwrap()["filtered"], false);
+    assert!(b.session.visible_cloned().len() > 1);
+    assert!(call_tool(&mut b, "search_text", &json!({})).is_error);
+    assert!(call_tool(&mut b, "search_text", &json!({"query": 5})).is_error);
+}
+
+#[test]
+fn photo_duplicates_returns_the_report_shape() {
+    let mut b = Headless::demo();
+    let first = b.session.visible_cloned()[0];
+    let r = call_tool(&mut b, "photo_duplicates", &json!({"id": first.0}));
+    assert!(!r.is_error, "{r:?}");
+    let v = r.structured.unwrap();
+    assert_eq!(v["id"], first.0);
+    assert!(v["photos"].is_array(), "{v}");
+    for k in ["digested", "pendingDigests", "ignored"] {
+        assert!(v.get(k).is_some(), "missing {k}: {v}");
+    }
+    // the default is the active photo; an unknown one is an error
+    assert!(!call_tool(&mut b, "photo_duplicates", &json!({})).is_error);
+    assert!(call_tool(&mut b, "photo_duplicates", &json!({"id": 9999})).is_error);
+}
