@@ -303,6 +303,8 @@ impl Session {
         // what was learned about the old library's faces is saved, and none of it carries over (photo ids are per library)
         #[cfg(not(target_arch = "wasm32"))]
         self.faces.library_changed();
+        // picture digests and ignored pairs belong to the library's folder: saved, then read afresh for the new one
+        self.vera.library_changed();
         let (mut journal, mut catalog, report) = Journal::open(catalog)?;
         // A loaded catalog counts revisions from 0, like every other one. Caches (sidebar counts,
         // keyword tree, the grid's list…) are keyed on the revision, so give each library loaded
@@ -505,6 +507,10 @@ impl Session {
         let _ = self.end_interaction();
         let persisted = self.persist();
         self.save_view();
+        // fingerprints made since the pump last saved (rebuildable: a failure is only logged)
+        if let Err(e) = self.vera.digests.save() {
+            log::warn!("vera: could not save the picture digests: {e}");
+        }
         let unlogged = if persisted.is_err() { self.pending_log.len() as u64 } else { 0 };
         let Some(lib) = self.library.as_mut() else { return Ok(()) };
         let before = lib.journal.seq();

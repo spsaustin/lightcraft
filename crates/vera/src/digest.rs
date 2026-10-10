@@ -395,21 +395,43 @@ pub fn hamming64(a: u64, b: u64) -> u32 {
 /// digest only when both frames' quality clears [`thresholds::PDQ_MIN_QUALITY`]); otherwise both at
 /// or under loose is a possible match; otherwise different.
 pub fn sameness(a: &Digest, b: &Digest) -> Sameness {
-    let pdq_d = hamming256(&a.pdq, &b.pdq);
-    let ph_d = hamming64(a.phash, b.phash);
-    let pdq_trusted = a.pdq_quality >= thresholds::PDQ_MIN_QUALITY && b.pdq_quality >= thresholds::PDQ_MIN_QUALITY;
-    if (pdq_trusted && pdq_d <= thresholds::PDQ_TIGHT) || ph_d <= thresholds::PHASH_TIGHT {
-        Sameness::Same
-    } else if pdq_d <= thresholds::PDQ_LOOSE && ph_d <= thresholds::PHASH_LOOSE {
-        Sameness::Possible
-    } else {
-        Sameness::Different
-    }
+    compare(a, b).sameness
 }
 
 /// Distances between two digests, for reports: (PDQ bits of 256, pHash bits of 64).
 pub fn distances(a: &Digest, b: &Digest) -> (u32, u32) {
     (hamming256(&a.pdq, &b.pdq), hamming64(a.phash, b.phash))
+}
+
+/// The algorithm these digests come from. A store that remembers digests beside this number can
+/// tell when a change to the computation (not the thresholds) makes its records stale and must be
+/// rebuilt rather than compared with fresh ones. Bumped only when a digest of the same pixels
+/// would come out differently.
+pub const ALGORITHM_VERSION: u8 = 1;
+
+/// [`sameness`] with the distances it was decided on, computed once.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Comparison {
+    pub sameness: Sameness,
+    /// PDQ bits of 256 that differ.
+    pub pdq: u32,
+    /// pHash bits of 64 that differ.
+    pub phash: u32,
+}
+
+/// Compare two digests: the verdict and both distances in one pass.
+pub fn compare(a: &Digest, b: &Digest) -> Comparison {
+    let pdq = hamming256(&a.pdq, &b.pdq);
+    let phash = hamming64(a.phash, b.phash);
+    let pdq_trusted = a.pdq_quality >= thresholds::PDQ_MIN_QUALITY && b.pdq_quality >= thresholds::PDQ_MIN_QUALITY;
+    let sameness = if (pdq_trusted && pdq <= thresholds::PDQ_TIGHT) || phash <= thresholds::PHASH_TIGHT {
+        Sameness::Same
+    } else if pdq <= thresholds::PDQ_LOOSE && phash <= thresholds::PHASH_LOOSE {
+        Sameness::Possible
+    } else {
+        Sameness::Different
+    };
+    Comparison { sameness, pdq, phash }
 }
 
 #[cfg(test)]

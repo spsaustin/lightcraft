@@ -57,6 +57,7 @@ pub mod segment;
 pub mod sidecar;
 pub mod smart;
 pub mod sync;
+pub(crate) mod vera;
 mod view;
 pub mod walk;
 
@@ -189,6 +190,8 @@ pub struct Session {
     /// The loaded recognition model and the face embeddings made with it.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) faces: faces_index::FacesState,
+    /// Search and same-picture detection (`docs/vera.md`): picture digests, the keyword index, ignored pairs.
+    pub(crate) vera: vera::State,
     /// Copied develop settings (partial JSON) for Paste.
     pub clipboard: Option<Value>,
     /// The folder on disk the [`LibrarySource::Folder`] view browses.
@@ -313,6 +316,7 @@ impl Session {
             face_catalog: Default::default(),
             #[cfg(not(target_arch = "wasm32"))]
             faces: Default::default(),
+            vera: Default::default(),
             clipboard: None,
             meta_clipboard: None,
             browse: None,

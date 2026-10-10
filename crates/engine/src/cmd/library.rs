@@ -86,8 +86,14 @@ pub fn import_params(s: &Session, p: &Value) -> Result<ImportRequest> {
         }
         None => Default::default(),
     };
+    let on_near_duplicate = match str_param(p, "onNearDuplicate") {
+        Some(v) => crate::import::NearDuplicateAction::parse(v)
+            .ok_or_else(|| bad("library.import", format!("unknown onNearDuplicate `{v}` (stack|import|skip)")))?,
+        None => Default::default(),
+    };
     let opts = crate::import::ImportOptions {
         on_deleted,
+        on_near_duplicate,
         mode,
         preset,
         keywords: strs(p, "keywords"),
@@ -1309,7 +1315,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Review Import",
             [],
             None,
-            "{paths: [file or folder (recursive)]} → {candidates: [{path, name, format, kind, width, height, fileSize, captured, duplicate?: path|content, existing?, error?, previewOnly?: why a raw can only be shown from its embedded preview}], duplicates, scanned} — nothing is added",
+            "{paths: [file or folder (recursive)]} → {candidates: [{path, name, format, kind, width, height, fileSize, captured, duplicate?: path|content, existing?, error?, previewOnly?: why a raw can only be shown from its embedded preview, nearDuplicate?: {existing, tier: picture|possible, pdq, phash} (the same or possibly the same picture as a library photo by fingerprint, once the library has fingerprints; the first 2000 files are checked)}], duplicates, scanned} — nothing is added",
             always,
             |s, p| {
                 let paths = strs(p, "paths");
@@ -1326,7 +1332,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Photos",
             ["File"],
             Some("Cmd+Shift+I"),
-            "{paths: [file or folder (recursive)], mode?: add|copy|move (add = reference the files in place; copy = into the library's Originals/YYYY/YYYY-MM-DD/; move = as copy, then each original and its XMP sidecars are removed from the source — only after the copy is verified (a hard link on the same volume, else copied, synced and compared byte for byte) and its catalog record is saved; failed, duplicate and unchecked files keep their sources; a taken name gets -1, -2…; undo removes the photos from the library but leaves the files at the destination), destination?: folder for copies / moves, organize?: date (YYYY/YYYY-MM-DD) | month (YYYY/YYYY-MM) | flat | a folder template, e.g. `{date:%Y}/{date:%Y%m%d}` → 2026/20260114 (the template's `/` make the folders, each level expanded with the rename tokens and made a safe folder name: never outside the destination; must be relative, no `..`; a level with missing metadata is `unknown`) — dated by capture time, else the import time, rename?: file-name template for copies, original extension added (tokens: {name} {num} {seq} {seq:N} {date} {date:%Y%m%d} {folder} {camera} {lens} {iso} {rating} {title} {creator} {ext}; photo.renameTokens explains each; blank = keep names), renameStart?: 1, metadataPreset?: name, dng?: bool (copy raws as DNG; copy only), local?: bool (browsing: the photos stay out of the library, like library.browse; not with move), album?: albumId, albumName?: new album, preset?: presetId, keywords?: [..], onDeleted?: skip|restore|fresh (a file that is in Recently Deleted: skip = leave it there and say so, restore = bring the photo back with its edits, fresh = delete the trashed record and import the file as new)} → {imported, duplicates: [{path, existing, reason, existingDeleted?}], restored?: [photoId], failed, moved?: [{from, to, sidecars?}], kept?: [{path, reason}] (move: sources left in place and why), album?}",
+            "{paths: [file or folder (recursive)], mode?: add|copy|move (add = reference the files in place; copy = into the library's Originals/YYYY/YYYY-MM-DD/; move = as copy, then each original and its XMP sidecars are removed from the source — only after the copy is verified (a hard link on the same volume, else copied, synced and compared byte for byte) and its catalog record is saved; failed, duplicate and unchecked files keep their sources; a taken name gets -1, -2…; undo removes the photos from the library but leaves the files at the destination), destination?: folder for copies / moves, organize?: date (YYYY/YYYY-MM-DD) | month (YYYY/YYYY-MM) | flat | a folder template, e.g. `{date:%Y}/{date:%Y%m%d}` → 2026/20260114 (the template's `/` make the folders, each level expanded with the rename tokens and made a safe folder name: never outside the destination; must be relative, no `..`; a level with missing metadata is `unknown`) — dated by capture time, else the import time, rename?: file-name template for copies, original extension added (tokens: {name} {num} {seq} {seq:N} {date} {date:%Y%m%d} {folder} {camera} {lens} {iso} {rating} {title} {creator} {ext}; photo.renameTokens explains each; blank = keep names), renameStart?: 1, metadataPreset?: name, dng?: bool (copy raws as DNG; copy only), local?: bool (browsing: the photos stay out of the library, like library.browse; not with move), album?: albumId, albumName?: new album, preset?: presetId, keywords?: [..], onDeleted?: skip|restore|fresh (a file that is in Recently Deleted: skip = leave it there and say so, restore = bring the photo back with its edits, fresh = delete the trashed record and import the file as new), onNearDuplicate?: stack|import|skip (a file the review (library.importPreview) found to be the same picture as a library photo by fingerprint — a resize, a re-export: stack = import it and stack it under that photo, import = import it like any other, skip = leave it out, listed with reason `picture`)} → {imported, duplicates: [{path, existing, reason: path|content|picture, existingDeleted?}], restored?: [photoId], failed, moved?: [{from, to, sidecars?}], kept?: [{path, reason}] (move: sources left in place and why), stacked?: [{photo, under}], album?}",
             always,
             |s, p| {
                 let req = import_params(s, p)?;
