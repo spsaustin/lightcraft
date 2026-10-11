@@ -48,7 +48,7 @@ fn vera_status_reports_lanes_and_counts() {
     assert_eq!(r["lanes"]["digest"], "live");
     assert_eq!(r["lanes"]["vector"]["state"], "needs_model");
     assert!(r["lanes"]["vector"]["reason"].as_str().is_some_and(|t| !t.is_empty()));
-    assert_eq!(r["lanes"]["describe"]["state"], "disabled");
+    assert_eq!(r["lanes"]["describe"]["state"], "needs_endpoint");
     // an in-memory library keeps its digests in memory only
     assert_eq!(r["sidecar"], json!({}));
     assert!(r["indexDocs"].is_u64());

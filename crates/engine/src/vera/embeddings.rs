@@ -8,8 +8,10 @@
 //! model or another dimension is ignored and written again.
 //!
 //! Layout (little-endian): `"LCVE"`, format version `1`, the model id (`u16` length + UTF-8), `dim u32`, then records
-//! of `key_len u16`, the content key (UTF-8), `role u8` ([`ROLE_CANONICAL`]: the picture as it is, rendered with
-//! default settings; `1` contextual and `2` fused are reserved for Phase 3 and skipped by this build) and `dim × f32`.
+//! of `key_len u16`, the content key (UTF-8), `role u8` and `dim × f32`. Roles: [`ROLE_CANONICAL`] (`0`, the picture
+//! as it is, rendered with default settings: what the space holds), [`ROLE_CONTEXTUAL`] (`1`, the text tower's
+//! embedding of the photo's accepted description: "title. caption. keywords") and [`ROLE_FUSED`] (`2`, the normalised
+//! sum of the two, which `photo.similar` prefers). The last two are kept beside the space, not in it.
 
 use std::collections::{HashMap, HashSet};
 use std::io::{BufReader, BufWriter, Read, Write};
@@ -22,8 +24,10 @@ const MAGIC: &[u8; 4] = b"LCVE";
 const VERSION: u8 = 1;
 /// The picture's own embedding (default settings, upright, uncropped).
 pub(crate) const ROLE_CANONICAL: u8 = 0;
-/// Reserved for Phase 3 (an embedding of the picture with its context, and a fusion of both): read past, not loaded.
-const ROLE_RESERVED_MAX: u8 = 2;
+/// The text embedding of the photo's accepted description (Phase 3, written by `describe.accept`).
+pub(crate) const ROLE_CONTEXTUAL: u8 = 1;
+/// The normalised sum of the canonical and contextual vectors.
+pub(crate) const ROLE_FUSED: u8 = 2;
 /// Largest cache file read (a million pictures at 768 numbers).
 const MAX_FILE: u64 = 4 << 30;
 /// Longest key stored (a content hash is 32 characters; a `file:` key carries a path).
@@ -49,8 +53,10 @@ pub(crate) struct EmbeddingStore {
     /// Space key → content key, and back.
     keys: HashMap<u64, String>,
     ids: HashMap<String, u64>,
-    /// Keys whose vectors are not in the file yet.
-    unsaved: Vec<String>,
+    /// The contextual and fused vectors (unit length), by (content key, role).
+    extra: HashMap<(String, u8), Vec<f32>>,
+    /// Keys (and roles) whose vectors are not in the file yet.
+    unsaved: Vec<(String, u8)>,
     path: Option<PathBuf>,
     /// The file on disk has this format's header and whole records, so new records can be appended to it.
     file_matches: bool,
@@ -67,6 +73,7 @@ impl EmbeddingStore {
             space: Space::new(model_id, dim),
             keys: HashMap::new(),
             ids: HashMap::new(),
+            extra: HashMap::new(),
             unsaved: Vec::new(),
             path: None,
             file_matches: false,
@@ -124,11 +131,43 @@ impl EmbeddingStore {
             return false;
         }
         if key.len() <= MAX_KEY {
-            self.unsaved.push(key.clone());
+            self.unsaved.push((key.clone(), ROLE_CANONICAL));
         }
         self.keys.insert(id, key.clone());
         self.ids.insert(key, id);
         true
+    }
+
+    /// Remember `key`'s vector of `role` ([`ROLE_CANONICAL`] goes to the space, as [`EmbeddingStore::insert`]; the
+    /// others are normalised to unit length and kept beside it). `false` for a vector that cannot be kept (the wrong
+    /// length, not finite, zero) or an unknown role.
+    pub fn insert_role(&mut self, key: String, role: u8, vector: &[f32]) -> bool {
+        if role == ROLE_CANONICAL {
+            return self.insert(key, vector);
+        }
+        if !matches!(role, ROLE_CONTEXTUAL | ROLE_FUSED) || vector.len() != self.dim || key.is_empty() {
+            return false;
+        }
+        let Some(v) = unit(vector) else { return false };
+        if key.len() <= MAX_KEY {
+            self.unsaved.push((key.clone(), role));
+        }
+        self.extra.insert((key, role), v);
+        true
+    }
+
+    /// `key`'s vector of `role` (unit length).
+    pub fn get_role(&self, key: &str, role: u8) -> Option<&[f32]> {
+        if role == ROLE_CANONICAL {
+            return self.get(key);
+        }
+        self.extra.get(&(key.to_string(), role)).map(Vec::as_slice)
+    }
+
+    /// How many photos have a vector of `role` beside the space.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn role_count(&self, role: u8) -> usize {
+        self.extra.keys().filter(|(_, r)| *r == role).count()
     }
 
     pub fn has_unsaved(&self) -> bool {
@@ -163,6 +202,7 @@ impl EmbeddingStore {
         self.space = Space::new(&self.model_id, self.dim);
         self.keys.clear();
         self.ids.clear();
+        self.extra.clear();
         self.unsaved.clear();
         self.file_matches = false;
         self.background = None;
@@ -194,13 +234,13 @@ impl EmbeddingStore {
         let read = parsed.records.len();
         let mut kept = 0usize;
         let mut clean = parsed.whole;
-        for (key, vector) in parsed.records {
+        for (key, role, vector) in parsed.records {
             if live.is_some_and(|l| !l.contains(&key)) {
                 continue;
             }
-            // a later record of the same key replaces an earlier one
-            let was = self.contains(&key);
-            if self.insert(key, &vector) {
+            // a later record of the same key and role replaces an earlier one
+            let was = if role == ROLE_CANONICAL { self.contains(&key) } else { self.extra.contains_key(&(key.clone(), role)) };
+            if self.insert_role(key, role, &vector) {
                 if !was {
                     kept += 1;
                 }
@@ -215,7 +255,7 @@ impl EmbeddingStore {
             self.unsaved.clear();
         } else {
             log::debug!("vera: embedding cache {}: {kept} of {read} records kept; rewriting", path.display());
-            self.unsaved = self.ids.keys().cloned().collect();
+            self.unsaved = self.ids.keys().map(|k| (k.clone(), ROLE_CANONICAL)).chain(self.extra.keys().cloned()).collect();
         }
     }
 
@@ -231,9 +271,9 @@ impl EmbeddingStore {
         }
         if self.file_matches {
             let mut buf = Vec::new();
-            for k in &self.unsaved {
-                if let Some(v) = self.get(k) {
-                    record(&mut buf, k, ROLE_CANONICAL, v);
+            for (k, role) in &self.unsaved {
+                if let Some(v) = self.get_role(k, *role) {
+                    record(&mut buf, k, *role, v);
                 }
             }
             match std::fs::OpenOptions::new().append(true).open(&path).and_then(|mut f| f.write_all(&buf)) {
@@ -266,6 +306,13 @@ impl EmbeddingStore {
                     w.write_all(&buf)?;
                 }
             }
+            let mut extra: Vec<(&(String, u8), &Vec<f32>)> = self.extra.iter().filter(|((k, _), _)| k.len() <= MAX_KEY).collect();
+            extra.sort_by(|a, b| a.0.cmp(b.0));
+            for ((k, role), v) in extra {
+                buf.clear();
+                record(&mut buf, k, *role, v);
+                w.write_all(&buf)?;
+            }
             w.flush()?;
             w.get_ref().sync_all()?;
         }
@@ -278,6 +325,15 @@ impl EmbeddingStore {
     pub fn file_len(&self) -> Option<u64> {
         self.path.as_ref().and_then(|p| std::fs::metadata(p).ok()).map(|m| m.len())
     }
+}
+
+/// `v` scaled to unit length; `None` when it is not finite or zero.
+pub(crate) fn unit(v: &[f32]) -> Option<Vec<f32>> {
+    let n = v.iter().map(|x| f64::from(*x) * f64::from(*x)).sum::<f64>().sqrt();
+    if !n.is_finite() || n <= 0.0 {
+        return None;
+    }
+    Some(v.iter().map(|x| (f64::from(*x) / n) as f32).collect())
 }
 
 impl Drop for EmbeddingStore {
@@ -308,8 +364,8 @@ fn record(buf: &mut Vec<u8>, key: &str, role: u8, v: &[f32]) {
 }
 
 struct Parsed {
-    /// Canonical records in file order (a key may repeat; the last one wins).
-    records: Vec<(String, Vec<f32>)>,
+    /// Records in file order, with their roles (a key and role may repeat; the last one wins).
+    records: Vec<(String, u8, Vec<f32>)>,
     /// The file ended on a record boundary and every record was readable.
     whole: bool,
 }
@@ -329,8 +385,7 @@ fn fill(r: &mut impl Read, buf: &mut [u8]) -> std::io::Result<usize> {
 }
 
 /// The records of a cache file of `model_id` at `dim`: `None` for a file that is not one (wrong magic, version, model
-/// or dimension). Records of the reserved roles are read past; a record with a key that is not UTF-8 or an unknown role
-/// is dropped (the file is then not whole).
+/// or dimension). A record with a key that is not UTF-8 or an unknown role is dropped (the file is then not whole).
 fn parse(r: &mut impl Read, model_id: &str, dim: usize) -> Option<Parsed> {
     let mut head = [0u8; 7];
     if fill(r, &mut head).ok()? != head.len() {
@@ -375,12 +430,10 @@ fn parse(r: &mut impl Read, model_id: &str, dim: usize) -> Option<Parsed> {
         }
         let [role] = role;
         match (std::str::from_utf8(&key), role) {
-            (Ok(k), ROLE_CANONICAL) if !k.is_empty() => {
+            (Ok(k), ROLE_CANONICAL | ROLE_CONTEXTUAL | ROLE_FUSED) if !k.is_empty() => {
                 let v: Vec<f32> = body.chunks_exact(4).filter_map(|c| c.try_into().ok().map(f32::from_le_bytes)).collect();
-                records.push((k.to_string(), v));
+                records.push((k.to_string(), role, v));
             }
-            // Phase 3's roles: not read by this build, kept in the file until it is rewritten
-            (Ok(k), r) if r <= ROLE_RESERVED_MAX && !k.is_empty() => {}
             _ => whole = false,
         }
     }
@@ -485,8 +538,8 @@ mod tests {
         st.save().unwrap();
         drop(st);
         let mut bytes = std::fs::read(&path).unwrap();
-        // a reserved role is read past, an unknown one is damage, and the last record is cut short
-        record(&mut bytes, "ctx", 1, &v(2));
+        // a contextual record is read beside the space, an unknown role is damage, and the last record is cut short
+        record(&mut bytes, "ctx", ROLE_CONTEXTUAL, &v(2));
         record(&mut bytes, "odd", 9, &v(3));
         let mut torn = Vec::new();
         record(&mut torn, "key9", ROLE_CANONICAL, &v(9));
@@ -496,6 +549,7 @@ mod tests {
         assert_eq!(st.len(), 1);
         assert!(!st.file_matches, "rewritten before anything is appended");
         assert!(!st.contains("ctx") && !st.contains("odd") && !st.contains("key9"));
+        assert!(st.get_role("ctx", ROLE_CONTEXTUAL).is_some(), "the contextual record is kept beside the space");
         st.insert("key2".into(), &v(2));
         st.save().unwrap();
         drop(st);
@@ -534,6 +588,37 @@ mod tests {
         let st = store(&path);
         assert_eq!(st.len(), 2);
         assert!(st.file_matches);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn contextual_and_fused_roles_round_trip() {
+        let dir = temp_dir("roles");
+        let path = dir.join(file_name(MODEL));
+        let mut st = store(&path);
+        assert!(st.insert("pic".into(), &v(1)));
+        assert!(st.insert_role("pic".into(), ROLE_CONTEXTUAL, &v(2)));
+        assert!(st.insert_role("pic".into(), ROLE_FUSED, &v(3)));
+        assert!(!st.insert_role("pic".into(), 7, &v(3)), "unknown role");
+        assert!(!st.insert_role("pic".into(), ROLE_FUSED, &[0.0; DIM]), "zero");
+        assert!(!st.insert_role("pic".into(), ROLE_FUSED, &[1.0; 3]), "wrong length");
+        assert_eq!(st.len(), 1, "only the canonical vector is in the space");
+        st.save().unwrap();
+        // an appended role record
+        assert!(st.insert_role("pic".into(), ROLE_CONTEXTUAL, &v(4)));
+        st.save().unwrap();
+        drop(st);
+        let st = store(&path);
+        assert_eq!((st.len(), st.role_count(ROLE_CONTEXTUAL), st.role_count(ROLE_FUSED)), (1, 1, 1));
+        assert!(close(st.get_role("pic", ROLE_CONTEXTUAL).unwrap(), &v(4)), "the last one wins");
+        assert!(close(st.get_role("pic", ROLE_FUSED).unwrap(), &v(3)));
+        assert!(close(st.get_role("pic", ROLE_CANONICAL).unwrap(), &v(1)));
+        drop(st);
+        // compaction drops them with their picture
+        let mut st = EmbeddingStore::new(MODEL, DIM);
+        st.reset(Some(path.clone()), Some(&HashSet::new()));
+        assert_eq!((st.len(), st.role_count(ROLE_CONTEXTUAL)), (0, 0));
+        drop(st);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -9,21 +9,22 @@ photographer's archive: its lanes, its measured thresholds and the fixtures that
   threads, no models, no knowledge of the catalog.
 - **`lightcraft-embed`** (`crates/embed`, layer 3): the SigLIP 2 image and text towers on candle, in pure Rust (the
   model choice is [vera-models.md](vera-models.md)). Turns a 256 × 256 picture or a query into a 768-number unit vector.
-- **The engine** (`crates/engine/src/vera/`): what to digest and embed and when, where the results are kept, and the
-  commands that show them. Everything is a command, so the UI, the CLI, the control channel and MCP all see the same
+- **The engine** (`crates/engine/src/vera/`): what to digest and embed and when, where the results are kept, the
+  describe lane's requests and its review queue, and the commands that show them. Everything is a command, so the UI, the CLI, the control channel and MCP all see the same
   thing.
 
 ## Lanes
 
 A search runs on *lanes*, each a different way of finding a photo; their ranked lists are fused into one. Phase 2 has
-three lanes, the third once its model is downloaded.
+three lanes, the third once its model is downloaded; Phase 3 adds the describe lane, which writes words for the keyword
+lane to find, only once the user accepts them.
 
 | Lane | What it finds | State |
 |---|---|---|
 | **keyword** | Photos whose words match: title, keywords (every level of `travel\|Italy\|Rome`), caption, alt text, extended description, file name, camera, lens and place | **live** |
 | **digest** | The same picture under other bytes: a resize, a re-export, a format change | **live** |
 | **vector** | Photos by meaning ("a dog on a beach"), look-alikes (`photo.similar`), and crops the digests cannot catch | **live** on the desktop once the user downloads SigLIP 2 (Phase 2); `needs_desktop` on the web |
-| **describe** | Words written for photos that have none, so the keyword lane can find them | disabled (Phase 3) |
+| **describe** | Words written for photos that have none, so the keyword lane can find them: a title, caption, alt text and keywords proposed by an endpoint the user configures and by zero-shot keywords from SigLIP 2, each reviewed before it is kept | **live** on the desktop once an endpoint is configured (Phase 3); keywords alone with the vector lane's model; `disabled` on the web |
 
 `vera.status` reports these on every build, with a sentence for each lane that is not running, so nothing claims a lane
 it does not have.
@@ -178,8 +179,9 @@ The web build does not start the worker: the lane says `needs_desktop`.
 `vera-embeddings-siglip2-base-patch32-256.bin` in the library folder, one canonical vector per picture (by content key,
 like the fingerprints, so a virtual copy shares its original's). Little-endian: `"LCVE"`, version `1`, the model id
 (`u16` length + UTF-8), `dim u32` (768), then records of `key_len u16`, the content key (UTF-8), `role u8` and `dim × f32`.
-Role `0` is the picture as it is (canonical); `1` (contextual) and `2` (fused) are reserved for Phase 3 and read past by
-this build. A file of another model or dimension, another version, or damaged is ignored and rewritten; a torn last
+Role `0` is the picture as it is (canonical, what the space holds); `1` (contextual: the text tower's vector of the
+photo's accepted description) and `2` (fused: the normalised sum of `0` and `1`) are Phase 3's, written when a
+description is accepted and kept beside the space (see *Contextual and fused vectors* below). A file of another model or dimension, another version, or damaged is ignored and rewritten; a torn last
 record makes the file be written whole before anything is appended; records of photos no longer in the catalog are
 dropped when the library opens (and the file rewritten without them); a repeated key keeps its last vector. The file is
 read as a stream (up to 4 GiB) and rewritten through a `.part` file and a rename. In memory the vectors are one
@@ -275,6 +277,177 @@ with a sentence in `reason` for each. `vera.status` also counts `embedded`, `pen
 `embeddings` (pictures in the space), reports `model: {id, installed, loaded, memoryBytes}`, and lists both sidecar
 files in `sidecars` (`[{name, path?, bytes?}]`; `sidecar` still names the digest file alone).
 
+## The describe lane (Phase 3)
+
+Words proposed for a photo (a title, a caption, alt text and keywords) so that the keyword lane can find it, each
+proposal reviewed before anything is kept. The choice of models and the protocol are
+[vera-describe.md](vera-describe.md): the remote path first, keywords from the model already shipped, a local captioner
+(Florence-2) in a later PR. Engine only so far (`crates/engine/src/vera/{describe,remote,keywords,review}.rs`); UI and
+MCP surfaces follow.
+
+### Where the words come from
+
+- **An endpoint the user configures**: any OpenAI-compatible `POST …/v1/chat/completions` that takes an image as a
+  base64 data URL (llama.cpp, Ollama, vLLM, LM Studio on the user's machine, or a host they trust). LightCraft ships no
+  default host. `vera.describe.config {endpoint, model}` sets it; the endpoint may be the server's base
+  (`http://127.0.0.1:8080`), its `/v1`, or the full `…/chat/completions` URL.
+- **Zero-shot keywords** from SigLIP 2, the vector lane's model, over the shipped vocabulary (below). A remote
+  proposal's keywords are ours first, then the endpoint's (each once, whatever its case); `photo.describe
+  {keywordsOnly: true}` proposes keywords alone and needs no endpoint at all.
+
+### The remote path and its consent
+
+- **Plain `http://` only to this computer**: a host in 127.0.0.0/8, `::1` or `localhost` (`Url::is_loopback` in
+  `lightcraft-fetch`; the engine enforces it). Anything else needs `https://` **and** `allowRemoteHost: true`, which the
+  app passes only after the user has agreed that the photos' pixels leave the computer (the PRD's sentence, shown by the
+  UI at that moment). Without it `vera.describe.config` refuses the endpoint and names the host; an endpoint with a
+  query string is refused too (a key belongs in the token). The rule holds for what would be saved, so taking the
+  consent back while a remote endpoint is set is refused as well; a hand-edited `prefs.json` that breaks it puts the
+  lane in `error`.
+- A non-loopback endpoint needs a token (`needs_token` until one is set); a loopback one may have one.
+- The host is shown wherever the work is listed: the activity row's detail, `vera.status`, every proposal's `source`.
+
+### The token
+
+Kept in `describe-remote.token` beside the model folders (`<vera_model_dir>/../`, i.e. `<config>/models/`), written
+through a `.part` file created with mode 0600 and renamed over the old one; a file group- or world-readable is refused
+(as ssh does: the lane says `error` and why, and the token is not sent) until `chmod 600` or a new
+`vera.describe.config {token}`. `LIGHTCRAFT_DESCRIBE_TOKEN` overrides the file. `{token: null}` deletes it. A token
+is 1–4096 visible ASCII characters (it goes in an `Authorization: Bearer` header, so no spaces or line breaks). It is
+never in a command's output (`tokenSet: true` only), the session journal (`vera.describe.config` is not journaled), a
+log line or error message (server answers are scrubbed of it), `prefs.json` or the catalog. A session without a model
+folder (the CLI, MCP, tests) has nowhere to keep one: the environment variable is the way there.
+
+### The request
+
+Per photo, one chat completion: `model` the user's, `temperature` 0.2, `max_tokens` 400, a system message ("You write
+catalog metadata for a photographer's archive… Do not guess who a person is, or their gender, age, ethnicity…"), a user
+message with the instructions (title ≤ 8 words in Title Case without a period; one-sentence caption; alt text of 1–2
+sentences ≤ 250 characters; 5–15 lower-case keywords; JSON only) and the picture, and `response_format` a strict JSON
+schema (`title` ≤ 80, `caption` ≤ 300, `alt` ≤ 300, `keywords` ≤ 20 × ≤ 40). The picture is rendered fresh with
+default settings, upright and uncropped (the face scan's render path), at 1024 px on the long edge, and encoded as a
+JPEG at quality 85 (4:2:0) with no metadata: nothing but pixels leaves the machine.
+
+The answer is `choices[0].message.content` (a string, or a list of text parts): code fences stripped, else the first
+balanced `{…}` in the text; every field the right type (`alt`, `alt_text` or `altText`; keywords a list, or a
+comma-separated string), control characters and runs of spaces collapsed, cut to its limit at a character boundary, a
+title's final period dropped, keywords lower-cased with `|` (LightCraft's hierarchy marker) turned into a space. An
+answer with no field at all is a failure.
+
+### The worker and its limits
+
+`photo.describe {ids?}` (the selection by default, at most 10,000, and at most 10,000 waiting or in review at once)
+puts photos in a queue; `vera.pump` hands them to four worker threads (`remote.rs`), one photo each, so **at most four
+requests are in flight**. It runs whatever the pace once asked for (it is an explicit request), except that **Pause
+stops new requests**: nothing is handed over, and a thread about to send waits. Each thread renders, encodes, sends,
+and scores the zero-shot keywords; the session thread only prepares the jobs and takes in the results.
+
+| Rule | Value |
+|---|---|
+| Attempts per photo | 3 (a 429 and a response-format step-down do not count) |
+| `429` | waits out `Retry-After` (seconds; 5 s when absent or a date; at most 300 s) for **every** thread, as the studio did; a photo gives up after 30 of them |
+| `400` | steps the response format down: strict JSON schema → `{"type": "json_object"}` → none (and the first `{…}` is read); remembered for the endpoint until it or the model changes |
+| `401` / `403` | the photo fails at once and the lane stops in `error` ("check the token") until `vera.describe.config` changes something |
+| Anything else (5xx, a connection error, a stall, an unreadable answer) | spends an attempt; 250 ms × attempts before the next |
+| Stall | 120 s without data |
+| Connect | 15 s |
+| Response | at most 64 KiB |
+
+Progress and cancel go through the activity stack: "Describing photos" (`kind "describe"`, the host as its detail, or
+"SigLIP 2 vocabulary" while the vocabulary is embedded the first time) with a ✕ (`Cancel::Flag`): the queue is
+emptied, requests in flight are abandoned at their next check (a quarter of a second), and what they return is dropped,
+neither proposed nor listed as failed. Photos that fail are listed by `describe.list` → `failed` with their error, for
+the session. A photo without a canonical vector yet is embedded by its worker from the same render (and the vector
+kept in the vector lane's store), so its keywords do not wait for the background pass.
+
+Memory: at most four 1024 px renders and their JPEGs (about 4 × 4 MB), the model already loaded by the vector lane, and
+the vocabulary's vectors (677 × 768 floats, 2 MB).
+
+### Zero-shot keywords and their calibration
+
+`vera/keywords.rs`. Every prompt of the shipped vocabulary (`vocabulary.rs`, `keywords.txt`: 398 terms in 9 facets,
+677 phrasings, each rendered into its facet's template and lower-cased) is embedded once with the text tower and kept
+as `vera-keywords-<model id>-<vocabulary hash>.bin` beside the library (`"LCVK"`, version `1`, the model id, the
+vocabulary hash `u64`, `dim u32`, then per prompt `facet u16`, `term u16`, `dim × f32`; a file of another model,
+vocabulary, dimension or prompt list is rebuilt). **Measured: 241–253 s on the CPU** (four threads, about 0.37 s a
+prompt: `embed_query` pads every prompt to 64 tokens and runs one at a time), so it is built off the session thread:
+`photo.keywords` answers "being embedded… try again shortly" meanwhile, and a describe run waits for it. In memory it
+survives a library change. A term's cosine with a photo is the best of its phrasings'.
+
+1. **Per-keyword normalisation**, once the vector lane's space holds 200 vectors or more: each term's median and MAD
+   over a deterministic sample of up to 2000 of them (ordered by a mix of their key and the space's seed), recomputed
+   when the space has moved as its background is (by a tenth, and changed), and the photo scored per term as
+   `z = (cos − median) / (MAD · 2.5)` (1e-6 when that is 0). A hub term every picture leans towards stops winning
+   everywhere (unit-tested; not yet measured on a real library). Below 200 vectors the raw cosines are used.
+2. **A per-photo ceiling**: this photo's scores against every term are the population of
+   `lightcraft_vera::cutoff::background_from_scores` (median and MAD × 2.5 of the lower half), and terms under
+   `mean + 2.25 sigma` are left out. **A deviation from the decision, measured**: the search lane's maximum-of-n ceiling
+   (`cutoff::ceiling` with the 398 terms as candidates, 5.1 sigma) let one keyword through in 24 demo scenes, because a
+   scene's best term sits only 2.5–4.5 sigma over its background. On the demo library: 2.0 sigma → recall@10 0.66 at
+   14.4 proposals a photo, **2.25 → 0.59 at 11.5**, 2.5 → 0.50 at 7.7, 3.0 → 0.34 at 3.2 (`CEILING_SIGMAS`). This
+   ceiling ranks more than it separates: shuffling a scene's cosines across the terms keeps as many proposals, so it is
+   per-keyword calibration that tells a photo from noise.
+3. **Facet rules** from the vocabulary: a `single` facet (time of day, season) keeps its best term only when it beats
+   the runner-up by the facet's margin (0.02 in cosine; divided by the median term spread when calibrated); a `multi`
+   facet keeps at most its `max` (subjects 8, settings 2, genre 2, light 1, colour 3, mood 1, weather 1). At most 15
+   in all, the best first; listed in facet order, then by score.
+
+`photo.keywords {id?, limit?}` shows the result for one photo without writing anything (the photo is embedded on the
+spot when the vector lane runs and it has no vector yet).
+
+**Measured on the demo library** (24 procedural scenes, CPU, `describe_real_keywords_recover_the_demo_scenes`):
+recall@10 of each scene's own keywords **26 / 44 = 0.59** (the dunes, lagoon, still-water and flower scenes find all
+theirs; the canyons find neither "canyon" nor "rock", proposing dunes, hills and texture); "dog", "car" and "people"
+never proposed. The hub terms "alpenglow", "serene", "reflection" and "negative space" come up across scenes: the case
+per-keyword calibration is for, which needs a library of 200.
+
+### The review queue
+
+`vera/review.rs`. Every result is a proposal `{photo, fields: {title?, caption?, alt_text?, keywords?}, source: {kind:
+remote | local, model, host?}, at}`, one per photo (a newer one replaces it), never written to the photo.
+`describe.list` adds `current`, the photo's own values of those fields, for the reviewer to compare. Kept beside the
+library as `vera-proposals.json` (written atomically every 3 seconds while a run brings proposals in, when it ends, on
+every accept, reject and clear, and when the library closes; read up to 16 MiB; proposals of photos no longer in the
+catalog dropped when the library opens; a damaged file is a fresh start).
+
+- `describe.accept {id, fields?, edits?, replaceKeywords?}` writes the chosen fields (all the proposal has by default),
+  with `edits` in place of the proposed values where given, as **one `photo.setMeta` commit labelled "Accept
+  Description"**: one undo step, journaled, synced to XMP like any edit. Keywords are added to the photo's own
+  (`addKeywords`) unless `replaceKeywords`. The proposal leaves the queue.
+- `describe.reject {id}` drops one, `describe.clear {}` all; neither writes anything.
+
+### Provenance
+
+`Meta.provenance` (`crates/catalog/src/model.rs`) records where a descriptive field's value came from, keyed by field
+name (`title`, `caption`, `alt_text`, `extended_description`, `keywords`): `{"kind": "user"}`, `{"kind": "exif"}` or
+`{"kind": "describe", "model", "at"}`. Left out of the catalog JSON when empty, so older catalogs read unchanged.
+`describe.accept` sets `describe` (the proposal's model; for local keywords the SigLIP model id) for each field it
+accepted, edited or not. `photo.setMeta` leaves provenance as it was unless its params carry `provenance: {field: origin
+| null}`; nothing else sets it yet (import does not mark `exif`).
+
+### Contextual and fused vectors
+
+Accepting a description schedules two vectors for the photo's picture, made by the pump once the text tower is at hand
+(one per pump call, not while paused): **contextual** (role `1`): the text tower's embedding of "title. caption.
+keywords" (empty parts left out), and **fused** (role `2`): the normalised sum of the canonical vector and the
+contextual one. Both go in the embedding sidecar with their role, beside the space (not in it), keyed by content key
+like the canonical vector (so a virtual copy's accepted words are its original's: the last accept wins).
+`photo.similar` **prefers the fused vector** as its query when the photo has one (`role: "fused"` in the result),
+scored against the canonical space with its own per-query noise ceiling: the picture's look-alikes, pulled towards
+pictures that also match its words. Search and duplicates keep using the canonical vectors only.
+
+### States
+
+`vera.status` → `lanes.describe` is `{state, reason, host?, pending, proposals}`:
+
+| State | When |
+|---|---|
+| `live` | An endpoint, a model name and (for a non-loopback host) a token are set and allowed |
+| `needs_endpoint` | No endpoint, or no model name; keywords alone still work (`keywordsOnly`) |
+| `needs_token` | A non-loopback endpoint without a token |
+| `disabled` | The web build |
+| `error` | The token file is readable by others, the saved endpoint breaks the policy, or the endpoint refused the token |
+
 ## In the app and over MCP
 
 - **Search:** typing in the search field filters live as before; **Enter** runs `search.text` and the grid shows the
@@ -294,11 +467,11 @@ files in `sidecars` (`[{name, path?, bytes?}]`; `sidecar` still names the digest
 
 | Command | Params → result |
 |---|---|
-| `vera.status` | `{}` → `{digested, photos, pendingDigests, unreadable, digests, embedded, pendingEmbeddings, unembeddable, embeddings, model: {id, installed, loaded, memoryBytes}, indexDocs, ignoredPairs, lanes: {keyword, digest, vector: {state, reason}, describe: {state, reason}}, sidecar: {path?, bytes?}, sidecars: [{name, path?, bytes?}]}` |
-| `vera.pump` | `{pace?: pause\|light\|normal\|full}` → `{active, pending, digested, photos, pace, embedding: {state, pending, embedded, photos, inFlight}}`; not journaled |
+| `vera.status` | `{}` → `{digested, photos, pendingDigests, unreadable, digests, embedded, pendingEmbeddings, unembeddable, embeddings, model: {id, installed, loaded, memoryBytes}, indexDocs, ignoredPairs, lanes: {keyword, digest, vector: {state, reason}, describe: {state: live\|needs_endpoint\|needs_token\|disabled\|error, reason, host?, pending, proposals}}, sidecar: {path?, bytes?}, sidecars: [{name, path?, bytes?}]}` |
+| `vera.pump` | `{pace?: pause\|light\|normal\|full}` → `{active, pending, digested, photos, pace, embedding: {state, pending, embedded, photos, inFlight}, describe: {pending, inFlight, proposals}}`; not journaled |
 | `vera.digest` | `{ids?}` (the selection) → `{digested, already, failed: [{id, error}]}`; fingerprint these photos now; not journaled |
 | `search.text` | `{query, limit?: 200, filter?: true}` → `{photos: [{id, score, lane: keyword\|vector\|both, cosine?, keywordScore?}], cutoff, lanes, filtered, warning?}`. Without the vector lane: `lanes: ["keyword"]`, `cutoff: null`, `score` the BM25 score (as in Phase 1); with it: `lanes: ["keyword", "vector"]`, `score` the fused one, `cutoff` the vector lane's ceiling. With `filter` the grid shows the results in rank order (sort key `relevance`); a search that finds nothing leaves the view alone |
-| `photo.similar` | `{id?, limit?: 50, filter?: true}` → `{id, photos: [{id, cosine, lane: "vector"}], cutoff, embedded, pendingEmbeddings, filtered}`; an error when the vector lane is not ready |
+| `photo.similar` | `{id?, limit?: 50, filter?: true}` → `{id, photos: [{id, cosine, lane: "vector"}], cutoff, embedded, pendingEmbeddings, filtered, role: canonical\|fused}`; an error when the vector lane is not ready; queries with the photo's fused vector once a description was accepted |
 | `photo.duplicates` | `{id?, limit?: 50, filter?: false}` → `{id, photos: [{id, tier: bytes\|picture\|possible\|similar, pdq, phash, lane?, cosine?, strong?}], ignored, digested, pendingDigests, embedded, pendingEmbeddings}`; rows by tier, then cosine (similar) or PDQ distance |
 | `vera.model.status` | `{}` → `{installed, dir?, downloading?: {done, total, file}, downloadError?, licence: {name, url, notice}, modelId, bytes, loaded, state}`; not journaled |
 | `vera.model.download` | `{acceptLicense: true}` → `{started, installed, downloading}`; an error naming the licence without `acceptLicense`; not journaled |
@@ -309,6 +482,13 @@ files in `sidecars` (`[{name, path?, bytes?}]`; `sidecar` still names the digest
 | `photo.stackDuplicate` | `{id, under}` → `{stack, count}`; undoable |
 | `library.import` | adds `onNearDuplicate?: stack\|import\|skip`; the report adds `stacked?` and the `picture` reason |
 | `library.importPreview` | candidates add `nearDuplicate?` |
+| `vera.describe.config` | `{endpoint?: url\|null, model?: text\|null, allowRemoteHost?: bool, token?: text\|null}` → `{endpoint, model, allowRemoteHost, tokenSet, state, reason}`; http only to loopback, another host only over https with `allowRemoteHost`; the token goes to its private file and is never returned; saved in `prefs.json` (not the token); not journaled |
+| `photo.describe` | `{ids?, keywordsOnly?: false}` (the selection, at most 10,000) → `{queued, already, skipped: [{id, error}], keywordsOnly, host?, model?}`; queues the photos for the worker (driven by `vera.pump`); an error saying what is missing when the lane is not `live` (or, with `keywordsOnly`, when there is no SigLIP 2 model or cached vocabulary); not journaled |
+| `photo.keywords` | `{id?, limit?: 15}` → `{id, keywords: [{keyword, facet, cosine, z?}], ceiling, calibrated}`; read-only; an error while the vocabulary is being embedded the first time, or when the photo has no embedding and the vector lane cannot make one; not journaled |
+| `describe.list` | `{limit?}` → `{proposals: [{photo, fields: {title?, caption?, alt_text?, keywords?}, source: {kind: remote\|local, model, host?}, at, current}], total, pending, inFlight, failed: [{photo, error}]}`; not journaled |
+| `describe.accept` | `{id, fields?: [title\|caption\|alt_text\|keywords], edits?: {field: value}, replaceKeywords?: false}` → `{id, accepted, changed, proposals}`; one `photo.setMeta` commit "Accept Description" with each accepted field's provenance; undoable |
+| `describe.reject` / `describe.clear` | `{id}` / `{}` → `{id?, removed, proposals}`; not journaled |
+| `photo.setMeta` | adds `provenance?: {title\|caption\|alt_text\|extended_description\|keywords: {kind: user\|exif\|describe, model?, at?} \| null}`; provenance is left as it was unless given |
 
 Every parameter is checked: wrong types are errors, limits and id lists are capped at 10,000, a query at 2,000
 characters.
@@ -328,9 +508,19 @@ All are rebuildable or small, and all live in the library folder; an in-memory l
   damaged, cut short, of another format or over 1 GiB is ignored and written again whole; when a library opens, records
   of photos no longer in its catalog are dropped and the file is rewritten without them.
 - **`vera-embeddings-siglip2-base-patch32-256.bin`**: the vector lane's embeddings, one per picture (format above, under
-  *The embedding sidecar*); rebuildable like the fingerprints, deleted by `vera.model.remove`.
+  *The embedding sidecar*); rebuildable like the fingerprints, deleted by `vera.model.remove` (with the contextual and
+  fused vectors, which are not made again until a description is next accepted).
+- **`vera-keywords-siglip2-base-patch32-256-<vocabulary hash>.bin`**: the shipped vocabulary's prompts embedded by the
+  text tower (format under *Zero-shot keywords and their calibration*); a few minutes to rebuild, written once per
+  library folder.
+- **`vera-proposals.json`**: the describe lane's review queue (`{"version": 1, "proposals": [...]}`, read up to 16 MiB,
+  at most 10,000, written atomically).
 - **`vera-ignored.json`**: the pairs set apart with `photo.ignorePair`, as pairs of content keys
   (`{"version": 1, "pairs": [[a, b], …]}`, read up to 1 MiB, at most 10,000 pairs, written atomically).
+
+Not beside the library: the describe token, `describe-remote.token` in the model folders' parent (`<config>/models/`,
+mode 0600), shared by every library; the endpoint, model name and consent are the library's (`prefs.json` →
+`vera.describe`).
 
 ### What is not in the op log, and why
 
@@ -338,7 +528,8 @@ None of these files is part of the catalog or its journal. Fingerprints and embe
 time, and tied to a rendition that may change. The ignored pairs are a user decision, and so arguably belong in the
 catalog, but they are kept outside the op log for now: `photo.ignorePair` is not an undo step and the pairs do not
 travel with a catalog snapshot. Stacking a duplicate (`photo.stackDuplicate`, the import's `stack`) does go through the
-op log, like any stack.
+op log, like any stack. Describe's proposals are suggestions waiting for a decision, not the catalog's content: they
+stay outside it, and only an accept (an ordinary `photo.setMeta`, with its provenance) enters the op log.
 
 ## Plan
 
@@ -348,7 +539,7 @@ The phases of the PRD this work follows, each gated on a measured proof rather t
 |---|---|---|
 | 1 | Keyword lane ranked (`search.text`, relevance sort); digest lane: background fingerprints, `photo.duplicates`, ignored pairs, stacking; the import's same-picture check | done: engine, app and MCP (below) |
 | 2 | Vector lane: SigLIP 2 Base patch32-256 as an opt-in download (`crates/embed`, the choice in [vera-models.md](vera-models.md)), vectors beside the library, the noise cutoff and rank fusion with the keyword lane, `photo.similar`, crops found as duplicates | engine done (this page); Gate 2 measured and the thresholds set; UI and MCP surfaces following |
-| 3 | Describe: words proposed for photos that have none, by a captioner the user points at (local when a licensed one fits, else an endpoint they configure), reviewed before anything is kept | planned |
+| 3 | Describe: words proposed for photos that have none, reviewed before anything is kept ([vera-describe.md](vera-describe.md)): the remote OpenAI-compatible path with its consent and token, zero-shot keywords from SigLIP 2 with per-keyword calibration, the review queue, provenance, contextual and fused vectors; a local captioner (Florence-2) next | engine done for the remote path and the keywords (this page); keywords measured on the demo library (recall@10 0.59); UI and MCP surfaces following; the Florence-2 port is the next PR |
 | 4 | The web build: keyword and digest lanes in the browser; the vector lane reports `needs_desktop` until a browser-runnable model is proven | planned |
 
 ## Open questions
@@ -367,3 +558,17 @@ The phases of the PRD this work follows, each gated on a measured proof rather t
   plumbing the face scan has.
 - **Incremental index updates.** The keyword index is rebuilt whole after any catalog change; `Index::upsert` and
   `remove` could follow the ops instead once a library is large enough for the rebuild to show.
+- **The Florence-2 port** (the next Describe PR, [vera-describe.md](vera-describe.md)): captions, titles and alt text
+  on this computer, with no endpoint. Its CPU speed (7–11 s a picture estimated) gates it.
+- **Per-keyword calibration on real photographs.** The z-scores are unit-tested on synthetic vectors only; the demo
+  library has 24 pictures, under the 200 the calibration needs. The hub terms the demo shows ("alpenglow", "serene",
+  "reflection", "negative space") are what it should remove: measure precision and recall on the labelled CC0 corpus
+  the decision describes, then re-check `CEILING_SIGMAS` (2.25, measured on raw cosines) on z-scores.
+- **The vocabulary's embedding time.** 241–253 s on the CPU, one prompt at a time padded to 64 tokens; a batched text
+  call in `lightcraft-embed` would cut it, and shipping the 2 MB of vectors with the app would remove it.
+- **Waiting for the vocabulary.** A first describe run holds its remote requests until the vocabulary is embedded, so
+  every proposal carries our keywords; sending them at once and adding the keywords later would show the first
+  proposals minutes sooner.
+- **Exif provenance.** Import could mark the fields it reads from a file as `exif`; nothing does yet.
+- **Contextual vectors per photo.** They are keyed by picture, like the canonical ones, so a virtual copy's accepted
+  words replace its original's; per-photo keys would need the sidecar's live set to know photo ids.

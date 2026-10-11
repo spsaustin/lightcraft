@@ -20,8 +20,6 @@
 //! The parser treats its input as hostile (it is a file we ship today and may read from the config folder tomorrow):
 //! size, line, term, facet and term-count caps, no control characters, and every problem is an `Err`, never a panic.
 //! No term names a person's gender, ethnicity, nationality, age bracket, religion or body; the tests enforce it.
-// Nothing outside the tests reads the vocabulary until the embedding step lands.
-#![allow(dead_code)]
 
 use std::collections::HashSet;
 

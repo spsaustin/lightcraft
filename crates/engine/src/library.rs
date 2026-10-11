@@ -158,7 +158,8 @@ struct PrefsFile {
     /// Days after which untouched Local records of unbrowsed folders are forgotten (missing =
     /// the default, 0 = never).
     forget_local_days: Option<u32>,
-    /// Search (`vera.config`): whether the vector lane runs for this library.
+    /// Search (`vera.config`): whether the vector lane runs for this library; Describe's endpoint
+    /// (`vera.describe.config`, never its token).
     vera: crate::vera::Prefs,
 }
 
@@ -347,6 +348,7 @@ impl Session {
         self.forget_local_days = prefs.forget_local_days.unwrap_or(lightcraft_catalog::DEFAULT_FORGET_DAYS);
         self.smart_previews_dir = prefs.smart_previews_dir.filter(|_| on_disk).map(PathBuf::from);
         self.vera.lane.vector_lane = prefs.vera.vector_lane;
+        self.vera.describe.prefs = prefs.vera.describe;
         if let Some(d) = &self.smart_previews_dir {
             self.media.smart_dir = Some(d.clone());
         }
@@ -517,6 +519,7 @@ impl Session {
         if let Err(e) = self.vera.lane.store.save() {
             log::warn!("vera: could not save the picture embeddings: {e}");
         }
+        self.vera.describe.review.save_if_due(true);
         let unlogged = if persisted.is_err() { self.pending_log.len() as u64 } else { 0 };
         let Some(lib) = self.library.as_mut() else { return Ok(()) };
         let before = lib.journal.seq();
@@ -588,7 +591,7 @@ impl Session {
             cache_mb: self.cache_mb,
             smart_previews_dir: self.smart_previews_dir.as_ref().map(|d| d.to_string_lossy().to_string()),
             forget_local_days: Some(self.forget_local_days),
-            vera: crate::vera::Prefs { vector_lane: self.vera.lane.vector_lane },
+            vera: crate::vera::Prefs { vector_lane: self.vera.lane.vector_lane, describe: self.vera.describe.prefs.clone() },
         })
         .unwrap_or_default();
         let Some(lib) = self.library.as_mut() else { return Ok(()) };

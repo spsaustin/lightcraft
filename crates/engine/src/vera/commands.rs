@@ -21,9 +21,6 @@ pub(crate) const MAX_LIMIT: usize = 10_000;
 /// Longest search query.
 const MAX_QUERY: usize = 2000;
 
-/// Why the describe lane is not running, said the same way everywhere.
-const DESCRIBE_REASON: &str = "Describing photos in words needs a captioning model; it is not part of this build (Phase 3).";
-
 /// An optional count: absent or null is `default`, a number is clamped to 1..=[`MAX_LIMIT`], anything else is an error.
 fn limit_param(p: &Value, key: &str, default: usize, c: &str) -> Result<usize> {
     match p.get(key) {
@@ -58,7 +55,7 @@ fn photo_param(s: &Session, p: &Value, key: &str, c: &str) -> Result<Option<Phot
 }
 
 /// `ids` (at most [`MAX_LIMIT`] photo ids), else the selection.
-fn targets_param(s: &Session, p: &Value, c: &str) -> Result<Vec<PhotoId>> {
+pub(crate) fn targets_param(s: &Session, p: &Value, c: &str) -> Result<Vec<PhotoId>> {
     match p.get("ids") {
         None | Some(Value::Null) => Ok(s.targets(&json!({}))),
         Some(Value::Array(a)) => {
@@ -132,7 +129,7 @@ fn status(s: &mut Session, _: &Value) -> Result<Value> {
             "keyword": "live",
             "digest": "live",
             "vector": {"state": vector.name(), "reason": vector.reason()},
-            "describe": {"state": "disabled", "reason": DESCRIBE_REASON},
+            "describe": super::describe::status_json(s),
         },
         "sidecar": sidecar,
         "sidecars": sidecars,
@@ -325,7 +322,12 @@ fn similar(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Err(e) => return Err(bad(C, format!("the vector lane is not ready: {e}"))),
     };
-    let (rows, cutoff) = vector_hits(s, &mine, limit, Some(&key), Noise::Image);
+    // a photo whose description was accepted is looked up by its fused vector (picture + words), else by its picture
+    let (query, role) = match s.vera.lane.store.get_role(&key, super::embeddings::ROLE_FUSED) {
+        Some(f) => (f.to_vec(), "fused"),
+        None => (mine, "canonical"),
+    };
+    let (rows, cutoff) = vector_hits(s, &query, limit, Some(&key), Noise::Image);
     let filtered = filter && !rows.is_empty();
     if filtered {
         s.filter.only = std::iter::once(id).chain(rows.iter().map(|(q, _)| *q)).collect();
@@ -340,6 +342,7 @@ fn similar(s: &mut Session, p: &Value) -> Result<Value> {
         "embedded": embedded_before,
         "pendingEmbeddings": pending,
         "filtered": filtered,
+        "role": role,
     }))
 }
 
@@ -522,7 +525,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Search Status",
             [],
             None,
-            "{} → {digested, photos, pendingDigests, unreadable, digests, embedded, pendingEmbeddings, unembeddable, embeddings, model: {id, installed, loaded, memoryBytes}, indexDocs, ignoredPairs, lanes: {keyword: \"live\", digest: \"live\", vector: {state: live | needs_model | downloading | disabled_by_user | needs_desktop | error, reason}, describe: {state, reason}}, sidecar: {path?, bytes?}, sidecars: [{name, path?, bytes?}]} — how far fingerprinting and embedding have got, and which search lanes this build runs (with a sentence for each)",
+            "{} → {digested, photos, pendingDigests, unreadable, digests, embedded, pendingEmbeddings, unembeddable, embeddings, model: {id, installed, loaded, memoryBytes}, indexDocs, ignoredPairs, lanes: {keyword: \"live\", digest: \"live\", vector: {state: live | needs_model | downloading | disabled_by_user | needs_desktop | error, reason}, describe: {state: live | needs_endpoint | needs_token | disabled | error, reason, host?, pending, proposals}}, sidecar: {path?, bytes?}, sidecars: [{name, path?, bytes?}]} — how far fingerprinting and embedding have got, and which search lanes this build runs (with a sentence for each)",
             always,
             status
         ),
@@ -531,7 +534,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fingerprint Photos in the Background",
             [],
             None,
-            "{pace?: pause | light | normal | full (normal)} → {active, pending, digested, photos, pace, embedding: {state, pending, embedded, photos, inFlight}} — cheap to call every frame: digests the next photos without a fingerprint (none when paused, 1 when light, 2 when normal, 4 when full) and, when the vector lane runs, hands as many photos without an embedding to the embedding thread; keeps the \"Fingerprinting photos\" and \"Embedding photos\" activity rows while there is work and saves both beside the library every few seconds",
+            "{pace?: pause | light | normal | full (normal)} → {active, pending, digested, photos, pace, embedding: {state, pending, embedded, photos, inFlight}, describe: {pending, inFlight, proposals}} — cheap to call every frame: digests the next photos without a fingerprint (none when paused, 1 when light, 2 when normal, 4 when full) and, when the vector lane runs, hands as many photos without an embedding to the embedding thread; keeps the \"Fingerprinting photos\" and \"Embedding photos\" activity rows while there is work and saves both beside the library every few seconds",
             always,
             pump
         ),
@@ -567,7 +570,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Find Photos That Look Alike",
             [],
             None,
-            "{id?: photo (the active one), limit?: 1..10000 (50), filter?: bool (true)} → {id, photos: [{id, cosine, lane: \"vector\"}], cutoff, embedded, pendingEmbeddings, filtered} — the photos that look most like this one by the vector lane (cosine of their SigLIP 2 embeddings), best first, those under the noise ceiling (cutoff) left out. The photo is embedded on the spot if the background pass has not got to it; an error says when the vector lane is not ready. With `filter`, the view shows the photo and the results in rank order (sort: relevance)",
+            "{id?: photo (the active one), limit?: 1..10000 (50), filter?: bool (true)} → {id, photos: [{id, cosine, lane: \"vector\"}], cutoff, embedded, pendingEmbeddings, filtered, role: canonical | fused} — the photos that look most like this one by the vector lane (cosine of their SigLIP 2 embeddings; the photo's fused picture-and-words vector once a description was accepted), best first, those under the noise ceiling (cutoff) left out. The photo is embedded on the spot if the background pass has not got to it; an error says when the vector lane is not ready. With `filter`, the view shows the photo and the results in rank order (sort: relevance)",
             always,
             similar
         ),
@@ -600,5 +603,6 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
     ];
     v.extend(super::model::specs());
+    v.extend(super::describe::specs());
     v
 }

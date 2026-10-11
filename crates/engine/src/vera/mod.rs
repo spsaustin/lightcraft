@@ -11,12 +11,20 @@
 //! - The vector lane ([`lane`], Phase 2): SigLIP 2 embeddings of every picture ([`embeddings`], made off the session
 //!   thread by [`worker`]), fused with the keyword lane in `search.text`, read by `photo.similar` and by the `similar`
 //!   tier of `photo.duplicates`; the model is downloaded on request (`vera.model.*`, [`model`]).
+//! - The Describe lane ([`describe`], Phase 3): titles, captions, alt text and keywords proposed by an endpoint the
+//!   user configures ([`remote`]) and by zero-shot keywords from the same model ([`keywords`]), waiting in a review
+//!   queue ([`review`]) until the user accepts them.
 
 pub(crate) mod commands;
+pub(crate) mod describe;
 pub(crate) mod digests;
 pub(crate) mod embeddings;
+pub(crate) mod keywords;
 pub(crate) mod lane;
 pub(crate) mod model;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) mod remote;
+pub(crate) mod review;
 pub(crate) mod vocabulary;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod worker;
@@ -59,12 +67,15 @@ const MAX_CANDIDATE_CACHE: usize = 20_000;
 pub(crate) const FIELD_WEIGHTS: [f32; 7] = [3.0, 2.5, 1.5, 1.0, 0.5, 1.0, 0.5];
 
 /// VERA's preferences, saved with the library (`prefs.json` → `vera`).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub(crate) struct Prefs {
     /// Whether the vector lane runs (`None`: the default, on once the model is installed).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vector_lane: Option<bool>,
+    /// Where the Describe lane sends photos (`vera.describe.config`; the token is not here).
+    #[serde(skip_serializing_if = "describe::Prefs::is_default")]
+    pub describe: describe::Prefs,
 }
 
 /// How hard the background pump may work now (the app says, from what the user is doing).
@@ -143,6 +154,8 @@ pub(crate) struct State {
     pub candidates: HashMap<(String, u64), Digest>,
     /// The vector lane: the model, the library's embeddings, their pump.
     pub lane: lane::Lane,
+    /// The Describe lane: its queue, its worker threads, the review queue.
+    pub describe: describe::Describe,
 }
 
 impl State {
@@ -150,7 +163,8 @@ impl State {
     /// but the vector lane's model (the same whatever library is open).
     pub fn library_changed(&mut self) {
         let lane = self.lane.library_changed();
-        *self = State { lane, ..State::default() };
+        let describe = self.describe.library_changed();
+        *self = State { lane, describe, ..State::default() };
     }
 }
 
@@ -159,7 +173,7 @@ pub(crate) fn eligible(p: &Photo) -> bool {
     p.in_library() && p.kind != MediaKind::Video
 }
 
-fn library_dir(s: &Session) -> Option<PathBuf> {
+pub(crate) fn library_dir(s: &Session) -> Option<PathBuf> {
     s.library.as_ref().filter(|l| l.on_disk).map(|l| l.dir.clone())
 }
 
@@ -190,6 +204,7 @@ pub(crate) fn ensure_open(s: &mut Session) {
     if s.vera.ignored.path() != ignored_path.as_deref() {
         s.vera.ignored = IgnoredPairs::load(ignored_path);
     }
+    describe::open(s, dir.as_deref());
     s.vera.opened = Some(dir);
 }
 
@@ -331,13 +346,17 @@ pub(crate) fn pump(s: &mut Session, pace: Pace) -> Value {
     save_if_due(s, pending);
     let embedding = lane::pump(s, pace);
     let embedding_active = embedding["pending"].as_u64().is_some_and(|n| n > 0);
+    // describing runs whatever the pace once asked for (pause only holds back new requests)
+    let describe = describe::pump(s, pace);
+    let describe_active = describe["pending"].as_u64().is_some_and(|n| n > 0) || describe["inFlight"].as_u64().is_some_and(|n| n > 0);
     json!({
-        "active": pending > 0 || embedding_active,
+        "active": pending > 0 || embedding_active || describe_active,
         "pending": pending,
         "digested": s.vera.digested_known,
         "photos": s.vera.photos_known,
         "pace": pace.name(),
         "embedding": embedding,
+        "describe": describe,
     })
 }
 
@@ -568,5 +587,7 @@ impl IgnoredPairs {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_describe;
 #[cfg(test)]
 mod tests_lane;

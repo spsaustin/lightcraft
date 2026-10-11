@@ -298,6 +298,133 @@ fn next_seed(prev: u64, now: &str) -> u64 {
     (lightcraft_catalog::mix64(prev.wrapping_add(1)) ^ t) & (MAX_SEED - 1)
 }
 
+/// `photo.setMeta`'s `provenance` param: `{field: {kind: user|exif|describe, model?, at?} | null}` for the descriptive
+/// fields ([`lightcraft_catalog::PROVENANCE_FIELDS`]); `null` forgets a field's origin.
+fn provenance_param(p: &Value) -> Result<Vec<(String, Option<lightcraft_catalog::Provenance>)>> {
+    const C: &str = "photo.setMeta";
+    let Some(v) = p.get("provenance") else { return Ok(Vec::new()) };
+    let Some(map) = v.as_object() else {
+        return Err(bad(C, "provenance is {field: {kind: user | exif | describe, model?, at?} | null}"));
+    };
+    let mut out = Vec::new();
+    for (field, origin) in map {
+        if !lightcraft_catalog::PROVENANCE_FIELDS.contains(&field.as_str()) {
+            return Err(bad(C, format!("provenance: unknown field `{field}` ({})", lightcraft_catalog::PROVENANCE_FIELDS.join(", "))));
+        }
+        let origin = match origin {
+            Value::Null => None,
+            o => Some(
+                serde_json::from_value::<lightcraft_catalog::Provenance>(o.clone()).map_err(|e| bad(C, format!("provenance of `{field}`: {e}")))?,
+            ),
+        };
+        if let Some(lightcraft_catalog::Provenance::Describe { model, at }) = &origin
+            && (model.chars().count() > 256 || at.chars().count() > 64)
+        {
+            return Err(bad(C, format!("provenance of `{field}`: model or time too long")));
+        }
+        out.push((field.clone(), origin));
+    }
+    Ok(out)
+}
+
+/// `photo.setMeta`: set descriptive metadata on `ids` / the selection, as one undo step named `label`
+/// (`describe.accept` commits through here as "Accept Description").
+pub(crate) fn set_meta(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
+    let strs = |k: &str| p.get(k).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>());
+    let targets = s.targets(p);
+    // GPS: "lat, lon" (decimal or 51°30'26"N 0°7'39"W), [lat, lon], or null / "" to clear
+    let gps: Option<Option<(f64, f64)>> = match p.get("gps") {
+        None => None,
+        Some(Value::Null) => Some(None),
+        Some(Value::String(t)) if t.trim().is_empty() => Some(None),
+        Some(Value::String(t)) => {
+            Some(Some(parse_gps(t).ok_or_else(|| bad("photo.setMeta", format!("can't read `{t}` as coordinates (e.g. 51.5072, -0.1276)")))?))
+        }
+        Some(Value::Array(a)) if a.len() == 2 => match (a[0].as_f64(), a[1].as_f64()) {
+            (Some(la), Some(lo)) if la.abs() <= 90.0 && lo.abs() <= 180.0 => Some(Some((la, lo))),
+            _ => return Err(bad("photo.setMeta", "gps is [latitude, longitude] in degrees")),
+        },
+        Some(_) => return Err(bad("photo.setMeta", "gps is \"lat, lon\", [lat, lon] or null")),
+    };
+    let status = match str_param(p, "copyrightStatus") {
+        Some(t) => Some(
+            CopyrightStatus::parse(t).ok_or_else(|| bad("photo.setMeta", format!("copyrightStatus `{t}`: unknown, copyrighted or publicDomain")))?,
+        ),
+        None => None,
+    };
+    let provenance = provenance_param(p)?;
+    let mut ops = Vec::new();
+    for id in targets {
+        let Some(ph) = s.catalog.photo(id) else { continue };
+        let mut m = ph.meta.clone();
+        if let Some(g) = gps {
+            m.gps = g;
+        }
+        if let Some(st) = status {
+            m.copyright_status = st;
+        }
+        for (k, field) in [
+            ("title", &mut m.title),
+            ("caption", &mut m.caption),
+            ("copyright", &mut m.copyright),
+            ("usageTerms", &mut m.usage_terms),
+            ("copyrightUrl", &mut m.copyright_url),
+            ("creator", &mut m.creator),
+            ("location", &mut m.location),
+            ("city", &mut m.city),
+            ("state", &mut m.state),
+            ("country", &mut m.country),
+            ("altText", &mut m.alt_text),
+            ("extendedDescription", &mut m.extended_description),
+        ] {
+            if let Some(v) = str_param(p, k) {
+                *field = v.to_string();
+            }
+        }
+        // keywords are stored cleaned (`a | b ` is `a|b`), each once whatever its case
+        use lightcraft_catalog::keywords::{clean, same};
+        let add = |m: &mut lightcraft_catalog::Meta, k: &str| {
+            let k = clean(k);
+            if !k.is_empty() && !m.keywords.iter().any(|x| same(x, &k)) {
+                m.keywords.push(k);
+            }
+        };
+        if let Some(k) = strs("keywords") {
+            m.keywords.clear();
+            for k in k {
+                add(&mut m, &k);
+            }
+        }
+        for k in strs("addKeywords").unwrap_or_default() {
+            add(&mut m, &k);
+        }
+        for k in strs("removeKeywords").unwrap_or_default() {
+            let k = clean(&k);
+            m.keywords.retain(|x| !same(&clean(x), &k));
+        }
+        // where the values came from, only when the call says (a plain edit leaves it as it was)
+        for (field, origin) in &provenance {
+            match origin {
+                Some(o) => {
+                    m.provenance.insert(field.clone(), o.clone());
+                }
+                None => {
+                    m.provenance.remove(field);
+                }
+            }
+        }
+        ops.push(Op::SetMeta { id, meta: Box::new(m) });
+    }
+    let n = ops.len();
+    s.commit(label, Op::Batch { ops })?;
+    // keywords just added become the Recent Keywords set
+    let added: Vec<String> = strs("addKeywords").unwrap_or_default().into_iter().chain(strs("keywords").unwrap_or_default()).collect();
+    if n > 0 && !added.is_empty() {
+        crate::cmd::keywords::note_recent(s, &added);
+    }
+    Ok(json!({"changed": n}))
+}
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         // ---- view source / filter / sort
@@ -783,93 +910,9 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Info",
             [],
             None,
-            "{ids?, title?, caption?, altText?, extendedDescription?, copyright?, copyrightStatus?: unknown|copyrighted|publicDomain, usageTerms?, copyrightUrl?, creator?, location?, city?, state?, country?, gps?: \"lat, lon\" | [lat, lon] | null, keywords?: [..], addKeywords?: [..], removeKeywords?: [..]}",
+            "{ids?, title?, caption?, altText?, extendedDescription?, copyright?, copyrightStatus?: unknown|copyrighted|publicDomain, usageTerms?, copyrightUrl?, creator?, location?, city?, state?, country?, gps?: \"lat, lon\" | [lat, lon] | null, keywords?: [..], addKeywords?: [..], removeKeywords?: [..], provenance?: {title|caption|alt_text|extended_description|keywords: {kind: user|exif|describe, model?, at?} | null}} — provenance is left as it was unless given",
             has_selection,
-            |s, p| {
-                let strs =
-                    |k: &str| p.get(k).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>());
-                let targets = s.targets(p);
-                // GPS: "lat, lon" (decimal or 51°30'26"N 0°7'39"W), [lat, lon], or null / "" to clear
-                let gps: Option<Option<(f64, f64)>> = match p.get("gps") {
-                    None => None,
-                    Some(Value::Null) => Some(None),
-                    Some(Value::String(t)) if t.trim().is_empty() => Some(None),
-                    Some(Value::String(t)) => Some(Some(
-                        parse_gps(t).ok_or_else(|| bad("photo.setMeta", format!("can't read `{t}` as coordinates (e.g. 51.5072, -0.1276)")))?,
-                    )),
-                    Some(Value::Array(a)) if a.len() == 2 => match (a[0].as_f64(), a[1].as_f64()) {
-                        (Some(la), Some(lo)) if la.abs() <= 90.0 && lo.abs() <= 180.0 => Some(Some((la, lo))),
-                        _ => return Err(bad("photo.setMeta", "gps is [latitude, longitude] in degrees")),
-                    },
-                    Some(_) => return Err(bad("photo.setMeta", "gps is \"lat, lon\", [lat, lon] or null")),
-                };
-                let status = match str_param(p, "copyrightStatus") {
-                    Some(t) => Some(
-                        CopyrightStatus::parse(t)
-                            .ok_or_else(|| bad("photo.setMeta", format!("copyrightStatus `{t}`: unknown, copyrighted or publicDomain")))?,
-                    ),
-                    None => None,
-                };
-                let mut ops = Vec::new();
-                for id in targets {
-                    let Some(ph) = s.catalog.photo(id) else { continue };
-                    let mut m = ph.meta.clone();
-                    if let Some(g) = gps {
-                        m.gps = g;
-                    }
-                    if let Some(st) = status {
-                        m.copyright_status = st;
-                    }
-                    for (k, field) in [
-                        ("title", &mut m.title),
-                        ("caption", &mut m.caption),
-                        ("copyright", &mut m.copyright),
-                        ("usageTerms", &mut m.usage_terms),
-                        ("copyrightUrl", &mut m.copyright_url),
-                        ("creator", &mut m.creator),
-                        ("location", &mut m.location),
-                        ("city", &mut m.city),
-                        ("state", &mut m.state),
-                        ("country", &mut m.country),
-                        ("altText", &mut m.alt_text),
-                        ("extendedDescription", &mut m.extended_description),
-                    ] {
-                        if let Some(v) = str_param(p, k) {
-                            *field = v.to_string();
-                        }
-                    }
-                    // keywords are stored cleaned (`a | b ` is `a|b`), each once whatever its case
-                    use lightcraft_catalog::keywords::{clean, same};
-                    let add = |m: &mut lightcraft_catalog::Meta, k: &str| {
-                        let k = clean(k);
-                        if !k.is_empty() && !m.keywords.iter().any(|x| same(x, &k)) {
-                            m.keywords.push(k);
-                        }
-                    };
-                    if let Some(k) = strs("keywords") {
-                        m.keywords.clear();
-                        for k in k {
-                            add(&mut m, &k);
-                        }
-                    }
-                    for k in strs("addKeywords").unwrap_or_default() {
-                        add(&mut m, &k);
-                    }
-                    for k in strs("removeKeywords").unwrap_or_default() {
-                        let k = clean(&k);
-                        m.keywords.retain(|x| !same(&clean(x), &k));
-                    }
-                    ops.push(Op::SetMeta { id, meta: Box::new(m) });
-                }
-                let n = ops.len();
-                s.commit("Edit Info", Op::Batch { ops })?;
-                // keywords just added become the Recent Keywords set
-                let added: Vec<String> = strs("addKeywords").unwrap_or_default().into_iter().chain(strs("keywords").unwrap_or_default()).collect();
-                if n > 0 && !added.is_empty() {
-                    crate::cmd::keywords::note_recent(s, &added);
-                }
-                Ok(json!({"changed": n}))
-            }
+            |s, p| set_meta(s, p, "Edit Info")
         ),
         // ---- albums
         cmd!("album.create", "New Album", ["File"], None, "{name, parent?: folderId, folder?: bool, addSelected?: bool}", always, |s, p| {

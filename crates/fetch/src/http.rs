@@ -1,11 +1,13 @@
-//! A small HTTP/1.1 GET client for model downloads, in pure Rust: `std::net` sockets and, for
+//! A small HTTP/1.1 client for model downloads (`GET`) and the Describe lane's requests to an
+//! OpenAI-compatible endpoint (`POST`, [`request`]), in pure Rust: `std::net` sockets and, for
 //! `https://`, rustls with the RustCrypto provider (`rustls-rustcrypto`; no `ring` or
 //! `aws-lc-rs`, so nothing is compiled from C or assembly) and the Mozilla root certificates
 //! (`webpki-roots`).
 //!
-//! Only what a large-file download needs: one request per connection (`Connection: close`),
-//! `Range` requests for resuming, redirects (followed by the caller), `Content-Length`,
-//! chunked and read-to-close bodies. Every read waits at most `stall` for data and checks the
+//! Only what those need: one request per connection (`Connection: close`), a request body sent
+//! with its `Content-Length`, `Range` requests for resuming, redirects (followed by the caller),
+//! `Content-Length`, chunked and read-to-close bodies. Which hosts may be reached over plain
+//! `http://` is the caller's policy ([`Url::is_loopback`] helps it decide). Every read waits at most `stall` for data and checks the
 //! cancel flag at least twice a second, so a dead server or a cancelled download never hangs
 //! the downloading thread. No proxies (see docs/ai-masks.md).
 
@@ -138,6 +140,15 @@ impl Url {
         let host = if self.host.contains(':') { format!("[{}]", self.host) } else { self.host.clone() };
         let default = if self.tls { 443 } else { 80 };
         if self.port == default { host } else { format!("{host}:{}", self.port) }
+    }
+
+    /// Whether the host is this computer: `localhost`, an address in 127.0.0.0/8, or `::1`. The engine allows plain
+    /// `http://` only to such a host (anything else needs `https://`).
+    pub fn is_loopback(&self) -> bool {
+        if self.host == "localhost" {
+            return true;
+        }
+        self.host.parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback())
     }
 
     /// The URL without its query (for messages: a query may hold a signed token).
@@ -394,6 +405,25 @@ impl Response {
         }
     }
 
+    /// The whole body, refused once it passes `cap` bytes (so a hostile server cannot make it grow without bound).
+    pub fn read_to_end(&mut self, cap: usize, limits: &Limits) -> Result<Vec<u8>, HttpError> {
+        if self.content_length().is_some_and(|n| n > cap as u64) {
+            return Err(HttpError::Protocol(format!("the response is larger than {cap} bytes")));
+        }
+        let mut out = Vec::new();
+        let mut buf = [0u8; 16 * 1024];
+        loop {
+            let n = self.read(&mut buf, limits)?;
+            if n == 0 {
+                return Ok(out);
+            }
+            if out.len().saturating_add(n) > cap {
+                return Err(HttpError::Protocol(format!("the response is larger than {cap} bytes")));
+            }
+            out.extend_from_slice(buf.get(..n).unwrap_or_default());
+        }
+    }
+
     /// Read body bytes into `out` (0 at the end of the body).
     pub fn read(&mut self, out: &mut [u8], limits: &Limits) -> Result<usize, HttpError> {
         match &mut self.body {
@@ -457,21 +487,54 @@ impl Response {
 
 /// Send `GET url` with extra `headers` and read the status line and headers.
 pub fn get(url: &Url, headers: &[(&str, String)], limits: &Limits) -> Result<Response, HttpError> {
+    request("GET", url, headers, None, limits)
+}
+
+/// Bodies sent are at most this large (a request is held in memory whole).
+pub const MAX_REQUEST_BODY: usize = 64 << 20;
+
+/// Send `method url` with extra `headers` and an optional `body`, and read the status line and headers. A body is
+/// sent with its `Content-Length` (and `Content-Type: application/octet-stream` unless `headers` name one); the same
+/// connect, stall and cancel limits apply to sending it as to reading the response. `method` is an upper-case token
+/// (`GET`, `POST`, …). Header names and values may not hold line breaks.
+pub fn request(method: &str, url: &Url, headers: &[(&str, String)], body: Option<&[u8]>, limits: &Limits) -> Result<Response, HttpError> {
+    if method.is_empty() || method.len() > 16 || !method.bytes().all(|b| b.is_ascii_uppercase()) {
+        return Err(HttpError::BadUrl(format!("unsupported method `{}`", method.chars().take(16).collect::<String>())));
+    }
+    if body.is_some_and(|b| b.len() > MAX_REQUEST_BODY) {
+        return Err(HttpError::BadUrl(format!("a request body is at most {} MiB", MAX_REQUEST_BODY >> 20)));
+    }
     let mut req = format!(
-        "GET {} HTTP/1.1\r\nHost: {}\r\nUser-Agent: LightCraft/{}\r\nAccept: */*\r\nAccept-Encoding: identity\r\nConnection: close\r\n",
+        "{method} {} HTTP/1.1\r\nHost: {}\r\nUser-Agent: LightCraft/{}\r\nAccept: */*\r\nAccept-Encoding: identity\r\nConnection: close\r\n",
         url.path,
         url.host_header(),
         env!("CARGO_PKG_VERSION")
     );
     for (k, v) in headers {
-        if v.chars().any(|c| c == '\r' || c == '\n') || k.chars().any(|c| c == '\r' || c == '\n' || c == ':') {
+        if v.chars().any(|c| c == '\r' || c == '\n') || k.is_empty() || k.chars().any(|c| c == '\r' || c == '\n' || c == ':' || c == ' ') {
             return Err(HttpError::BadUrl("header with a line break".into()));
         }
+        if body.is_some() && k.eq_ignore_ascii_case("content-length") {
+            // set from the body below; a second, different one would be a smuggling hazard
+            continue;
+        }
         req.push_str(&format!("{k}: {v}\r\n"));
+    }
+    if let Some(b) = body {
+        if !headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("content-type")) {
+            req.push_str("Content-Type: application/octet-stream\r\n");
+        }
+        req.push_str(&format!("Content-Length: {}\r\n", b.len()));
     }
     req.push_str("\r\n");
     let mut stream = Stream::connect(url, limits)?;
     stream.write_all(req.as_bytes(), limits)?;
+    if let Some(b) = body {
+        // in pieces, so TLS never buffers more than one piece of plaintext
+        for piece in b.chunks(16 * 1024) {
+            stream.write_all(piece, limits)?;
+        }
+    }
     let mut conn = Conn { stream, buf: Vec::new(), pos: 0 };
     let status_line = conn.line(MAX_HEAD, limits)?;
     let mut parts = status_line.split_whitespace();
@@ -496,7 +559,7 @@ pub fn get(url: &Url, headers: &[(&str, String)], limits: &Limits) -> Result<Res
         }
     }
     let find = |name: &str| headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.as_str());
-    let body = if status == 204 || status == 304 || (100..200).contains(&status) {
+    let body = if method == "HEAD" || status == 204 || status == 304 || (100..200).contains(&status) {
         BodyMode::Done
     } else if find("transfer-encoding").is_some_and(|v| v.to_ascii_lowercase().contains("chunked")) {
         BodyMode::Chunked { left: 0, done: false }
@@ -541,6 +604,187 @@ mod tests {
         assert_eq!(u.join("other").unwrap().path, "/x/y/other");
         assert_eq!(u.join("//c.example/p").unwrap().host, "c.example");
         assert!(u.join("ftp://nope").is_err());
+    }
+
+    #[test]
+    fn loopback_hosts() {
+        for (u, want) in [
+            ("http://localhost:8080/v1", true),
+            ("http://127.0.0.1/", true),
+            ("http://127.10.20.30:1/", true),
+            ("http://[::1]:11434/", true),
+            ("http://LOCALHOST/", true),
+            ("https://example.com/", false),
+            ("http://192.168.1.4:8080/", false),
+            ("http://10.0.0.1/", false),
+            ("http://localhost.example.com/", false),
+            ("http://[::2]/", false),
+            ("http://0.0.0.0/", false),
+        ] {
+            assert_eq!(Url::parse(u).unwrap().is_loopback(), want, "{u}");
+        }
+    }
+
+    /// A one-request-per-connection stub on loopback: reads the request head and its `Content-Length` body, hands both
+    /// to `answer`, writes what it returns and closes.
+    fn stub(answer: impl Fn(&str, &[u8]) -> Vec<u8> + Send + 'static) -> (String, std::thread::JoinHandle<()>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let handle = std::thread::spawn(move || {
+            for conn in listener.incoming() {
+                let mut sock = conn.unwrap();
+                let mut data = Vec::new();
+                let mut buf = [0u8; 8192];
+                let head_end = loop {
+                    let n = sock.read(&mut buf).unwrap();
+                    assert!(n > 0, "the client closed before sending its request");
+                    data.extend_from_slice(&buf[..n]);
+                    if let Some(i) = data.windows(4).position(|w| w == b"\r\n\r\n") {
+                        break i + 4;
+                    }
+                };
+                let head = String::from_utf8_lossy(&data[..head_end]).to_string();
+                let len = head
+                    .lines()
+                    .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap()))
+                    .unwrap_or(0);
+                while data.len() < head_end + len {
+                    let n = sock.read(&mut buf).unwrap();
+                    assert!(n > 0);
+                    data.extend_from_slice(&buf[..n]);
+                }
+                let reply = answer(&head, &data[head_end..head_end + len]);
+                let quit = head.starts_with("QUIT");
+                sock.write_all(&reply).unwrap();
+                drop(sock);
+                if quit {
+                    return;
+                }
+            }
+        });
+        (base, handle)
+    }
+
+    fn quit(base: &str, handle: std::thread::JoinHandle<()>) {
+        let never = AtomicBool::new(false);
+        let _ = request("QUIT", &Url::parse(base).unwrap(), &[], None, &limits(&never));
+        handle.join().unwrap();
+    }
+
+    fn limits(cancel: &AtomicBool) -> Limits<'_> {
+        Limits { connect: Duration::from_secs(5), stall: Duration::from_secs(5), cancel }
+    }
+
+    #[test]
+    fn post_sends_the_body_with_its_length_and_type() {
+        let (base, handle) = stub(|head, body| {
+            let first = head.lines().next().unwrap_or_default().to_string();
+            let header = |name: &str| {
+                head.lines().find_map(|l| l.split_once(':').filter(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.trim().to_string()))
+            };
+            let echo = format!(
+                "{first}\n{}\n{}\n{}\n{}",
+                header("content-type").unwrap_or_default(),
+                header("content-length").unwrap_or_default(),
+                header("authorization").unwrap_or_default(),
+                body.len()
+            );
+            let mut r =
+                format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{echo}", echo.len() + body.len()).into_bytes();
+            r.extend_from_slice(body);
+            r
+        });
+        let never = AtomicBool::new(false);
+        let url = Url::parse(&format!("{base}/v1/chat/completions")).unwrap();
+        let body = br#"{"model":"m","messages":[]}"#;
+        let headers = [("Content-Type", "application/json".to_string()), ("Authorization", "Bearer abc".to_string())];
+        let mut r = request("POST", &url, &headers, Some(body), &limits(&never)).unwrap();
+        assert_eq!(r.status, 200);
+        assert_eq!(r.header("content-type"), Some("text/plain"));
+        let got = String::from_utf8(r.read_to_end(1 << 20, &limits(&never)).unwrap()).unwrap();
+        let mut lines = got.lines();
+        assert_eq!(lines.next(), Some("POST /v1/chat/completions HTTP/1.1"));
+        assert_eq!(lines.next(), Some("application/json"));
+        assert_eq!(lines.next(), Some(body.len().to_string().as_str()));
+        assert_eq!(lines.next(), Some("Bearer abc"));
+        assert!(got.ends_with(std::str::from_utf8(body).unwrap()), "{got}");
+        // a large body goes in pieces and arrives whole; a caller's Content-Length is replaced by the real one
+        let big: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+        let headers = [("Content-Length", "5".to_string())];
+        let mut r = request("POST", &url, &headers, Some(&big), &limits(&never)).unwrap();
+        let got = r.read_to_end(1 << 20, &limits(&never)).unwrap();
+        assert!(got.ends_with(&big), "the body is echoed whole");
+        let text = String::from_utf8_lossy(&got[..got.len() - big.len()]).to_string();
+        assert!(text.contains("application/octet-stream") && text.contains("300000"), "{text}");
+        // the response cap is enforced
+        let mut r = request("POST", &url, &[], Some(&big), &limits(&never)).unwrap();
+        assert!(matches!(r.read_to_end(64 * 1024, &limits(&never)), Err(HttpError::Protocol(_))));
+        // GET is the same request without a body
+        let mut r = get(&url, &[], &limits(&never)).unwrap();
+        let got = String::from_utf8(r.read_to_end(1 << 20, &limits(&never)).unwrap()).unwrap();
+        assert!(got.starts_with("GET /v1/chat/completions HTTP/1.1\n\n\n"), "no body headers on a GET: {got}");
+        // hostile methods and headers are refused before connecting
+        for m in ["", "post", "GET /x HTTP/1.1\r\nX:", "ABCDEFGHIJKLMNOPQ"] {
+            assert!(matches!(request(m, &url, &[], None, &limits(&never)), Err(HttpError::BadUrl(_))), "{m:?}");
+        }
+        let evil = [("X-A", "1\r\nInjected: yes".to_string())];
+        assert!(matches!(request("POST", &url, &evil, Some(b"x"), &limits(&never)), Err(HttpError::BadUrl(_))));
+        let evil = [("X A", "1".to_string())];
+        assert!(matches!(request("POST", &url, &evil, Some(b"x"), &limits(&never)), Err(HttpError::BadUrl(_))));
+        // a raised cancel flag stops the request before it is sent
+        let cancelled = AtomicBool::new(true);
+        assert_eq!(request("POST", &url, &[], Some(b"x"), &limits(&cancelled)).err(), Some(HttpError::Cancelled));
+        quit(&base, handle);
+    }
+
+    #[test]
+    fn post_reads_a_429_with_retry_after_and_chunked_bodies() {
+        let (base, handle) = stub(|head, _| {
+            if head.starts_with("POST /busy") {
+                b"HTTP/1.1 429 Too Many Requests\r\nRetry-After: 7\r\nContent-Length: 4\r\n\r\nbusy".to_vec()
+            } else if head.starts_with("POST /chunked") {
+                b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5;x=y\r\nhello\r\n7\r\n, world\r\n0\r\nTrailer: t\r\n\r\n".to_vec()
+            } else if head.starts_with("POST /close") {
+                b"HTTP/1.1 500 Internal Server Error\r\n\r\nbroken".to_vec()
+            } else {
+                b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n".to_vec()
+            }
+        });
+        let never = AtomicBool::new(false);
+        let url = |p: &str| Url::parse(&format!("{base}{p}")).unwrap();
+        let mut r = request("POST", &url("/busy"), &[], Some(b"{}"), &limits(&never)).unwrap();
+        assert_eq!((r.status, r.header("retry-after")), (429, Some("7")));
+        assert_eq!(r.read_to_end(1024, &limits(&never)).unwrap(), b"busy");
+        let mut r = request("POST", &url("/chunked"), &[], Some(b"{}"), &limits(&never)).unwrap();
+        assert_eq!(r.status, 200);
+        assert_eq!(r.content_length(), None);
+        assert_eq!(r.read_to_end(1024, &limits(&never)).unwrap(), b"hello, world");
+        // a chunked body over the cap is refused too
+        let mut r = request("POST", &url("/chunked"), &[], Some(b"{}"), &limits(&never)).unwrap();
+        assert!(r.read_to_end(8, &limits(&never)).is_err());
+        let mut r = request("POST", &url("/close"), &[], Some(b"{}"), &limits(&never)).unwrap();
+        assert_eq!(r.status, 500);
+        assert_eq!(r.read_to_end(1024, &limits(&never)).unwrap(), b"broken");
+        let mut r = request("HEAD", &url("/busy"), &[], None, &limits(&never)).unwrap();
+        assert_eq!(r.read_to_end(1024, &limits(&never)).unwrap(), b"", "a HEAD response has no body");
+        quit(&base, handle);
+    }
+
+    #[test]
+    fn a_silent_server_stalls() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
+        let keep = std::thread::spawn(move || {
+            let (sock, _) = listener.accept().unwrap();
+            std::thread::sleep(Duration::from_millis(1500));
+            drop(sock);
+        });
+        let never = AtomicBool::new(false);
+        let quick = Limits { connect: Duration::from_secs(5), stall: Duration::from_millis(600), cancel: &never };
+        let started = Instant::now();
+        assert_eq!(request("POST", &url, &[], Some(b"{}"), &quick).err(), Some(HttpError::Stalled));
+        assert!(started.elapsed() < Duration::from_millis(1400));
+        keep.join().unwrap();
     }
 
     #[test]

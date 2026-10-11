@@ -40,6 +40,7 @@ fn meta_of(m: &lightcraft_meta::Metadata) -> (Meta, Option<String>) {
         // paths from `lr:hierarchicalSubject`, names from `dc:subject` that aren't their levels
         keywords: lightcraft_catalog::keywords::from_file(&m.keywords, &m.hierarchical_keywords),
         regions: m.regions.clone(),
+        provenance: Default::default(),
     };
     (meta, m.capture_time.as_ref().map(|d| d.to_iso()))
 }
