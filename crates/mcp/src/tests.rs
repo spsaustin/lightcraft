@@ -619,3 +619,243 @@ fn vera_model_rejects_unknown_actions_before_the_engine() {
         ]
     );
 }
+
+fn text_of(r: &crate::ToolResult) -> String {
+    r.content[0]["text"].as_str().unwrap().to_string()
+}
+
+/// The Describe helpers are listed with their arguments and hints, and reject keys they do not have.
+#[test]
+fn describe_tools_are_listed_with_schemas_and_hints() {
+    let mut s = server();
+    let list = rpc(&mut s, 1, "tools/list", json!({}));
+    let tools = list["result"]["tools"].as_array().unwrap();
+    let tool = |n: &str| tools.iter().find(|t| t["name"] == n).unwrap_or_else(|| panic!("missing {n}"));
+    let hints = |n: &str| {
+        let a = &tool(n)["annotations"];
+        (a["readOnlyHint"].clone(), a["destructiveHint"].clone(), a["idempotentHint"].clone())
+    };
+    let props = |n: &str, ks: &[&str]| {
+        for k in ks {
+            assert!(tool(n)["inputSchema"]["properties"].get(*k).is_some(), "{n}.{k}");
+        }
+        assert_eq!(tool(n)["inputSchema"]["required"], json!([]), "{n}");
+    };
+    props("vera_describe_config", &["endpoint", "model", "allowRemoteHost", "token"]);
+    props("photo_describe", &["ids", "keywordsOnly"]);
+    props("describe_review", &["action", "id", "fields", "edits", "replaceKeywords", "limit"]);
+    props("photo_keywords", &["id", "limit"]);
+    assert_eq!(tool("describe_review")["inputSchema"]["properties"]["action"]["enum"], json!(["list", "accept", "reject", "clear"]));
+    assert_eq!(tool("photo_describe")["inputSchema"]["properties"]["ids"]["type"], "array");
+    assert_eq!(hints("vera_describe_config"), (json!(false), json!(false), json!(true)));
+    assert_eq!(hints("photo_describe"), (json!(false), json!(false), json!(false)));
+    assert_eq!(hints("describe_review"), (json!(false), json!(false), json!(false)));
+    assert_eq!(hints("photo_keywords"), (json!(true), json!(false), json!(true)));
+    for n in ["vera_describe_config", "photo_describe", "describe_review", "photo_keywords"] {
+        assert!(tool(n)["annotations"]["title"].is_string(), "{n}");
+        assert_eq!(tool(n)["annotations"]["openWorldHint"], false, "{n}");
+    }
+    let d = tool("vera_describe_config")["description"].as_str().unwrap();
+    for needle in ["OpenAI-compatible", "127.0.0.1", "https", "allowRemoteHost: true", "0600", "tokenSet", "never"] {
+        assert!(d.contains(needle), "vera_describe_config lacks {needle}");
+    }
+    let d = tool("vera_status")["description"].as_str().unwrap();
+    for needle in ["needs_endpoint", "needs_token", "disabled", "host"] {
+        assert!(d.contains(needle), "vera_status lacks {needle}");
+    }
+    for (name, args) in [
+        ("vera_describe_config", json!({"misspelled": 1})),
+        ("photo_describe", json!({"misspelled": 1})),
+        ("describe_review", json!({"misspelled": 1})),
+        ("photo_keywords", json!({"misspelled": 1})),
+    ] {
+        let r = rpc(&mut s, 2, "tools/call", json!({"name": name, "arguments": args}));
+        assert_eq!(r["error"]["code"], -32602, "{r}");
+        assert!(r["error"]["message"].as_str().unwrap().contains("misspelled"), "{r}");
+    }
+}
+
+/// The endpoint is set without a token; a token is kept (needs a model folder to live beside) and never shown.
+#[test]
+fn vera_describe_config_sets_the_endpoint_and_never_shows_the_token() {
+    const SECRET: &str = "sk-secret-xyz";
+    let mut b = Headless::demo();
+    let r = call_tool(&mut b, "vera_describe_config", &json!({"endpoint": "http://127.0.0.1:1"}));
+    assert!(!r.is_error, "{r:?}");
+    let v = r.structured.unwrap();
+    assert_eq!((v["endpoint"].clone(), v["tokenSet"].clone()), (json!("http://127.0.0.1:1"), json!(false)), "{v}");
+    // an empty call reads
+    let v = call_tool(&mut b, "vera_describe_config", &json!({})).structured.unwrap();
+    assert_eq!(v["endpoint"], "http://127.0.0.1:1");
+
+    let dir = std::env::temp_dir().join(format!("lc-mcp-describe-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("models")).unwrap();
+    b.session.vera_model_dir = Some(dir.join("models"));
+    let r = call_tool(&mut b, "vera_describe_config", &json!({"model": "stub-vlm", "token": SECRET}));
+    let all = format!("{r:?}{}", serde_json::to_string(&r.to_value()).unwrap());
+    assert!(!r.is_error, "{r:?}");
+    assert!(!all.contains(SECRET), "the token is not in the result: {all}");
+    let v = r.structured.unwrap();
+    assert_eq!((v["tokenSet"].clone(), v["model"].clone()), (json!(true), json!("stub-vlm")), "{v}");
+    // nor does a later read, or the status, show it
+    for (tool, args) in [("vera_describe_config", json!({})), ("vera_status", json!({}))] {
+        let r = call_tool(&mut b, tool, &args);
+        assert!(!serde_json::to_string(&r.to_value()).unwrap().contains(SECRET), "{tool}");
+    }
+    // null clears it
+    let v = call_tool(&mut b, "vera_describe_config", &json!({"token": null})).structured.unwrap();
+    assert_eq!(v["tokenSet"], false, "{v}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A refused endpoint is a tool error that says why and never repeats the token given with it.
+#[test]
+fn vera_describe_config_errors_never_repeat_the_token() {
+    const SECRET: &str = "sk-secret-xyz";
+    let mut b = Headless::demo();
+    let r = call_tool(&mut b, "vera_describe_config", &json!({"endpoint": "http://example.com", "token": SECRET}));
+    assert!(r.is_error, "{r:?}");
+    let t = text_of(&r);
+    assert!(t.contains("https"), "{t}");
+    assert!(!t.contains(SECRET), "{t}");
+    assert!(!serde_json::to_string(&r.to_value()).unwrap().contains(SECRET));
+    // a token alone with nowhere to keep it, or of the wrong type, is refused without repeating it either
+    for args in [json!({"token": SECRET}), json!({"token": SECRET, "allowRemoteHost": "yes"}), json!({"endpoint": 5, "token": SECRET})] {
+        let r = call_tool(&mut b, "vera_describe_config", &args);
+        assert!(r.is_error, "{args}: {r:?}");
+        assert!(!text_of(&r).contains(SECRET), "{args}");
+    }
+    // whatever the engine says, the token is scrubbed from it
+    struct Echo;
+    impl Backend for Echo {
+        fn call(&mut self, _: &str, params: Value) -> Result<Value, String> {
+            Err(format!("bad params {}", params["params"]))
+        }
+        fn has_ui(&self) -> bool {
+            true
+        }
+        fn describe(&self) -> String {
+            "echo".into()
+        }
+    }
+    let r = call_tool(&mut Echo, "vera_describe_config", &json!({"endpoint": "x", "token": SECRET}));
+    assert!(r.is_error && !text_of(&r).contains(SECRET), "{r:?}");
+}
+
+/// Without an endpoint Describe is a tool error naming it; keywords alone need the model, and say so.
+#[test]
+fn photo_describe_says_what_is_missing() {
+    let mut b = Headless::demo();
+    let first = b.session.visible_cloned()[0];
+    let r = call_tool(&mut b, "photo_describe", &json!({"ids": [first.0]}));
+    assert!(r.is_error, "{r:?}");
+    assert!(text_of(&r).contains("endpoint"), "{r:?}");
+    for args in [json!({"keywordsOnly": true}), json!({"ids": [first.0], "keywordsOnly": true})] {
+        let r = call_tool(&mut b, "photo_describe", &args);
+        assert!(r.is_error, "{args}: {r:?}");
+        assert!(text_of(&r).contains("model"), "{r:?}");
+    }
+    assert!(call_tool(&mut b, "photo_describe", &json!({"keywordsOnly": "yes"})).is_error);
+    // nothing was queued
+    let v = call_tool(&mut b, "describe_review", &json!({})).structured.unwrap();
+    assert_eq!((v["pending"].clone(), v["inFlight"].clone()), (json!(0), json!(0)), "{v}");
+}
+
+#[test]
+fn describe_review_lists_an_empty_queue_and_clear_and_reject_are_harmless() {
+    let mut b = Headless::demo();
+    for args in [json!({}), json!({"action": "list"}), json!({"action": "list", "limit": 5})] {
+        let r = call_tool(&mut b, "describe_review", &args);
+        assert!(!r.is_error, "{args}: {r:?}");
+        let v = r.structured.unwrap();
+        assert_eq!((v["proposals"].clone(), v["total"].clone()), (json!([]), json!(0)), "{v}");
+    }
+    assert!(!call_tool(&mut b, "describe_review", &json!({"action": "clear"})).is_error);
+    let first = b.session.visible_cloned()[0];
+    assert!(!call_tool(&mut b, "describe_review", &json!({"action": "reject", "id": first.0})).is_error);
+    // accepting what was never proposed is the engine's error
+    let r = call_tool(&mut b, "describe_review", &json!({"action": "accept", "id": first.0}));
+    assert!(r.is_error && text_of(&r).contains("no proposal"), "{r:?}");
+}
+
+/// accept / reject need an `id`, an unknown action is refused, and the engine is not called for either; the rest is forwarded as given.
+#[test]
+fn describe_review_validates_before_the_engine() {
+    let mut rec = Recorder(vec![]);
+    for args in [
+        json!({"action": "accept"}),
+        json!({"action": "reject"}),
+        json!({"action": "accept", "id": null}),
+        json!({"action": "accept", "id": "7"}),
+        json!({"action": "accept", "id": -1}),
+        json!({"action": "approve", "id": 1}),
+        json!({"action": "List"}),
+        json!({"action": 5}),
+        json!({"action": ""}),
+    ] {
+        let r = call_tool(&mut rec, "describe_review", &args);
+        assert!(r.is_error, "{args}: {r:?}");
+    }
+    assert!(rec.0.is_empty(), "the engine was not called: {:?}", rec.0);
+    let t = text_of(&call_tool(&mut rec, "describe_review", &json!({"action": "accept"})));
+    assert!(t.contains("`id`"), "{t}");
+    let t = text_of(&call_tool(&mut rec, "describe_review", &json!({"action": "approve"})));
+    assert!(t.contains("approve") && t.contains("accept"), "{t}");
+    assert!(rec.0.is_empty());
+
+    for args in [
+        json!({}),
+        json!({"action": "list", "limit": 3, "id": 9}),
+        json!({"action": "accept", "id": 4, "fields": ["title"], "edits": {"title": "T"}, "replaceKeywords": true, "limit": 2}),
+        json!({"action": "reject", "id": 4, "fields": ["title"]}),
+        json!({"action": "clear", "id": 4}),
+    ] {
+        assert!(!call_tool(&mut rec, "describe_review", &args).is_error);
+    }
+    let call = |c: &str, p: Value| ("engine.execute".to_string(), json!({"command": c, "params": p}));
+    assert_eq!(
+        rec.0,
+        vec![
+            call("describe.list", json!({})),
+            call("describe.list", json!({"limit": 3})),
+            call("describe.accept", json!({"id": 4, "fields": ["title"], "edits": {"title": "T"}, "replaceKeywords": true})),
+            call("describe.reject", json!({"id": 4})),
+            call("describe.clear", json!({})),
+        ]
+    );
+}
+
+/// The other helpers forward exactly their own arguments.
+#[test]
+fn describe_helpers_forward_their_arguments() {
+    let mut rec = Recorder(vec![]);
+    call_tool(&mut rec, "photo_describe", &json!({"ids": [1, 2], "keywordsOnly": true}));
+    call_tool(&mut rec, "photo_describe", &json!({}));
+    call_tool(&mut rec, "photo_keywords", &json!({"id": 3, "limit": 5}));
+    call_tool(&mut rec, "vera_describe_config", &json!({"endpoint": null, "model": "m", "allowRemoteHost": false}));
+    let call = |c: &str, p: Value| ("engine.execute".to_string(), json!({"command": c, "params": p}));
+    assert_eq!(
+        rec.0,
+        vec![
+            call("photo.describe", json!({"ids": [1, 2], "keywordsOnly": true})),
+            call("photo.describe", json!({})),
+            call("photo.keywords", json!({"id": 3, "limit": 5})),
+            call("vera.describe.config", json!({"endpoint": null, "model": "m", "allowRemoteHost": false})),
+        ]
+    );
+}
+
+/// Without the model there are no keywords to suggest, and the error names the model.
+#[test]
+fn photo_keywords_without_the_model_is_an_error_naming_it() {
+    let mut b = Headless::demo();
+    let first = b.session.visible_cloned()[0];
+    for args in [json!({}), json!({"id": first.0, "limit": 5})] {
+        let r = call_tool(&mut b, "photo_keywords", &args);
+        assert!(r.is_error, "{args}: {r:?}");
+        assert!(text_of(&r).contains("model"), "{r:?}");
+    }
+    assert!(call_tool(&mut b, "photo_keywords", &json!({"id": 9999})).is_error);
+    assert!(call_tool(&mut b, "photo_keywords", &json!({"limit": 0})).is_error);
+}
