@@ -238,5 +238,18 @@
   "PDQ {pdq} of 256 bits apart, pHash {phash} of 64": "PDQ: відрізняються {pdq} з 256 біт, pHash: {phash} з 64",
   "The same picture as {name} in the library ({distances})": "Те саме зображення, що {name} у бібліотеці ({distances})",
   "Possibly the same picture as {name} in the library ({distances})": "Можливо, те саме зображення, що {name} у бібліотеці ({distances})",
-  "{same} found: resizes or re-exports of photos in the library": "Знайдено: {same} — зменшені або повторно експортовані фото з бібліотеки"
+  "{same} found: resizes or re-exports of photos in the library": "Знайдено: {same} — зменшені або повторно експортовані фото з бібліотеки",
+  "{digested} of {photos} photos fingerprinted · {embedded} of {photos} embedded": "Відбитки: {digested} з {photos} фото · вектори: {embedded} з {photos}",
+  "{digested} of {photos} photos fingerprinted": "Відбитки: {digested} з {photos} фото",
+  "{done:.2} of {total:.2} GB · {file}": "{done:.2} з {total:.2} ГБ · {file}",
+  "The download didn't work: {e}": "Завантаження не вдалося: {e}",
+  "Download the model ({size})": "Завантажити модель ({size})",
+  "{size} on disk": "{size} на диску",
+  " · {mb} MB in memory while in use": " · {mb} МБ у пам’яті під час роботи",
+  "Remove the model ({size}) and this library's embeddings? Search by meaning stops until you download it again.": "Видалити модель ({size}) і вектори цієї бібліотеки? Пошук за змістом не працюватиме, доки ви не завантажите її знову.",
+  "Saved in {dir}": "Зберігається в {dir}",
+  "{name} · commercial use allowed": "{name} · комерційне використання дозволено",
+  "No photos look like {name}": "Немає фото, схожих на {name}",
+  "Ranked: “{query}” · by words and meaning": "За релевантністю: «{query}» · за словами і змістом",
+  "Looks like {name}": "Схожі на {name}"
 }

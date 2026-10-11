@@ -238,5 +238,18 @@
   "PDQ {pdq} of 256 bits apart, pHash {phash} of 64": "PDQ: различаются {pdq} из 256 бит, pHash: {phash} из 64",
   "The same picture as {name} in the library ({distances})": "То же изображение, что {name} в библиотеке ({distances})",
   "Possibly the same picture as {name} in the library ({distances})": "Возможно, то же изображение, что {name} в библиотеке ({distances})",
-  "{same} found: resizes or re-exports of photos in the library": "Найдено: {same} — уменьшенные или заново экспортированные фото из библиотеки"
+  "{same} found: resizes or re-exports of photos in the library": "Найдено: {same} — уменьшенные или заново экспортированные фото из библиотеки",
+  "{digested} of {photos} photos fingerprinted · {embedded} of {photos} embedded": "Отпечатки: {digested} из {photos} фото · векторы: {embedded} из {photos}",
+  "{digested} of {photos} photos fingerprinted": "Отпечатки: {digested} из {photos} фото",
+  "{done:.2} of {total:.2} GB · {file}": "{done:.2} из {total:.2} ГБ · {file}",
+  "The download didn't work: {e}": "Загрузка не удалась: {e}",
+  "Download the model ({size})": "Загрузить модель ({size})",
+  "{size} on disk": "{size} на диске",
+  " · {mb} MB in memory while in use": " · {mb} МБ в памяти во время работы",
+  "Remove the model ({size}) and this library's embeddings? Search by meaning stops until you download it again.": "Удалить модель ({size}) и векторы этой библиотеки? Поиск по смыслу не будет работать, пока вы не загрузите её снова.",
+  "Saved in {dir}": "Сохраняется в {dir}",
+  "{name} · commercial use allowed": "{name} · коммерческое использование разрешено",
+  "No photos look like {name}": "Нет фото, похожих на {name}",
+  "Ranked: “{query}” · by words and meaning": "По релевантности: «{query}» · по словам и смыслу",
+  "Looks like {name}": "Похожие на {name}"
 }

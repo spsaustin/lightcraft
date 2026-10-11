@@ -183,6 +183,7 @@ const LAYOUT: &[(&str, &[&str])] = &[
             "photo.virtualCopy",
             "@Stack",
             "photo.showDuplicates",
+            "photo.showLookAlikes",
             "@Photo Merge",
             "---",
             "develop.auto",

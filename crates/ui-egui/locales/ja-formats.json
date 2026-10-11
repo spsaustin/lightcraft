@@ -238,5 +238,18 @@
   "PDQ {pdq} of 256 bits apart, pHash {phash} of 64": "PDQ: 256 ビット中 {pdq} ビットが相違、pHash: 64 中 {phash}",
   "The same picture as {name} in the library ({distances})": "ライブラリの {name} と同じ画像 ({distances})",
   "Possibly the same picture as {name} in the library ({distances})": "ライブラリの {name} と同じ画像の可能性 ({distances})",
-  "{same} found: resizes or re-exports of photos in the library": "{same} 件: ライブラリの写真のリサイズ版または再書き出し版"
+  "{same} found: resizes or re-exports of photos in the library": "{same} 件: ライブラリの写真のリサイズ版または再書き出し版",
+  "{digested} of {photos} photos fingerprinted · {embedded} of {photos} embedded": "指紋作成済み {digested}/{photos} 枚 · 埋め込み済み {embedded}/{photos} 枚",
+  "{digested} of {photos} photos fingerprinted": "指紋作成済み {digested}/{photos} 枚",
+  "{done:.2} of {total:.2} GB · {file}": "{done:.2} / {total:.2} GB · {file}",
+  "The download didn't work: {e}": "ダウンロードできませんでした: {e}",
+  "Download the model ({size})": "モデルをダウンロード ({size})",
+  "{size} on disk": "ディスク上 {size}",
+  " · {mb} MB in memory while in use": " · 使用中のメモリ {mb} MB",
+  "Remove the model ({size}) and this library's embeddings? Search by meaning stops until you download it again.": "モデル ({size}) とこのライブラリの埋め込みを削除しますか? 再度ダウンロードするまで意味による検索は止まります。",
+  "Saved in {dir}": "保存先: {dir}",
+  "{name} · commercial use allowed": "{name} · 商用利用可",
+  "No photos look like {name}": "{name} に似た写真はありません",
+  "Ranked: “{query}” · by words and meaning": "関連順: 「{query}」 · 単語と意味で",
+  "Looks like {name}": "{name} に似た写真"
 }

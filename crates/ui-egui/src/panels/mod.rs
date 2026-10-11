@@ -31,6 +31,7 @@ pub mod strip;
 pub mod topbar;
 pub mod unnamed;
 pub mod vera;
+pub mod vera_settings;
 
 use egui::{Align2, Rect, pos2, vec2};
 
@@ -72,11 +73,20 @@ pub fn resizable_side(
 /// The HUD toast at the bottom centre of the canvas.
 pub fn toast(app: &mut LightcraftApp, ctx: &egui::Context) {
     let now = ctx.input(|i| i.time);
-    let Some((text, until, label)) = app.ui.toast.clone() else { return };
+    let Some((text, until, label)) = app.ui.toast.clone() else {
+        app.ui.toast_action = None;
+        return;
+    };
     if now > until {
         app.ui.toast = None;
+        app.ui.toast_action = None;
         return;
     }
+    // a button offered with this toast (one offered with an earlier toast went with it)
+    if app.ui.toast_action.as_ref().is_some_and(|a| a.text != text) {
+        app.ui.toast_action = None;
+    }
+    let action = app.ui.toast_action.clone();
     let Some(canvas) = app.canvas_rect else { return };
     let t = Tokens::get(ctx);
     let fade = ((until - now) / 0.25).clamp(0.0, 1.0) as f32;
@@ -85,11 +95,36 @@ pub fn toast(app: &mut LightcraftApp, ctx: &egui::Context) {
     let wrap = (canvas.width() - 80.0).clamp(200.0, 720.0);
     let (background, foreground) = label.map(crate::theme::label_toast_colors).unwrap_or((egui::Color32::from_black_alpha(200), t.text));
     let foreground = foreground.gamma_multiply(fade);
-    let galley = painter.layout(text, t.font(14.0), foreground, wrap);
-    let size = vec2(galley.size().x + 40.0, (galley.size().y + 22.0).max(40.0));
+    let button = action.as_ref().map(|a| painter.layout_no_wrap(a.label.clone(), t.semibold(12.5), t.text));
+    let button_w = button.as_ref().map_or(0.0, |b| b.size().x + 20.0 + 12.0);
+    let galley = painter.layout(text, t.font(14.0), foreground, (wrap - button_w).max(160.0));
+    let size = vec2(galley.size().x + 40.0 + button_w, (galley.size().y + 22.0).max(40.0));
     let r = Rect::from_center_size(pos2(canvas.center().x, canvas.bottom() - 60.0), size);
     painter.rect_filled(r, 6.0, background.gamma_multiply(fade));
-    painter.galley(r.center() - galley.size() / 2.0, galley, foreground);
+    painter.galley(pos2(r.left() + 20.0, r.center().y - galley.size().y / 2.0), galley, foreground);
+    if let (Some(a), Some(b)) = (action, button) {
+        // the button is a real widget, above the painted toast
+        let br = Rect::from_min_size(pos2(r.right() - button_w + 2.0, r.center().y - 13.0), vec2(b.size().x + 20.0, 26.0));
+        let clicked = egui::Area::new(egui::Id::new("toast-action"))
+            .order(egui::Order::Tooltip)
+            .fixed_pos(br.min)
+            .show(ctx, |ui| {
+                let (rect, resp) = ui.allocate_exact_size(br.size(), egui::Sense::click());
+                let fill = if resp.hovered() { t.hover } else { t.button };
+                ui.painter().rect_filled(rect, 4.0, fill.gamma_multiply(fade));
+                ui.painter().galley(rect.center() - b.size() / 2.0, b, t.text.gamma_multiply(fade));
+                crate::widgets::register(ui.ctx(), "button:toastAction", rect);
+                resp.clicked()
+            })
+            .inner;
+        if clicked {
+            app.ui.toast = None;
+            app.ui.toast_action = None;
+            if let Err(e) = app.run(&a.command, a.params) {
+                app.toast_error(ctx, e);
+            }
+        }
+    }
     ctx.request_repaint_after(std::time::Duration::from_millis(30));
 }
 

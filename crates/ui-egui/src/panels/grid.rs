@@ -894,6 +894,10 @@ pub fn context_menu(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
             Err(e) => app.toast(ui.ctx(), e),
         }
     }
+    // by the vector lane; when it is not ready, the command's own toast says why
+    if ui.button(crate::i18n::tr("Find Photos That Look Alike")).clicked() {
+        let _ = app.run("photo.showLookAlikes", json!({"id": id.0}));
+    }
     if ui.button(crate::i18n::tr("Show Duplicates")).clicked()
         && let Err(e) = app.run("photo.showDuplicates", json!({"id": id.0}))
     {

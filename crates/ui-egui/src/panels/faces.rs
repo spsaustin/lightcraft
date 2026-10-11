@@ -23,7 +23,9 @@ use crate::widgets::register;
 pub(crate) fn scan_pace(app: &LightcraftApp, ctx: &egui::Context, now: f64) -> (&'static str, bool) {
     let (focused, minimized) = ctx.input(|i| (i.focused, i.raw.viewports.get(&i.raw.viewport_id).and_then(|v| v.minimized).unwrap_or(false)));
     let watching =
-        matches!(&app.ui.dialog, Some(crate::state::Dialog::Settings { tab }) if tab == "faces") || app.ui.view == crate::state::ViewMode::People;
+        // (Settings ▸ Search shows the background embedding's counts, which share this pace)
+        matches!(&app.ui.dialog, Some(crate::state::Dialog::Settings { tab }) if tab == "faces" || tab == "search")
+            || app.ui.view == crate::state::ViewMode::People;
     (pace_for(focused, minimized, now - app.caches.last_input, now - app.caches.last_move, watching), focused && !minimized)
 }
 
@@ -168,7 +170,7 @@ fn mb(bytes: Option<u64>) -> String {
 }
 
 /// "its input is not an image" → "Its input is not an image."
-fn sentence(s: &str) -> String {
+pub(crate) fn sentence(s: &str) -> String {
     let s = s.trim();
     let mut c = s.chars();
     let mut out: String = c.next().map(|f| f.to_uppercase().collect()).unwrap_or_default();

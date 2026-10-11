@@ -238,5 +238,18 @@
   "PDQ {pdq} of 256 bits apart, pHash {phash} of 64": "PDQ: {pdq} von 256 Bits verschieden, pHash: {phash} von 64",
   "The same picture as {name} in the library ({distances})": "Dasselbe Bild wie {name} in der Bibliothek ({distances})",
   "Possibly the same picture as {name} in the library ({distances})": "Möglicherweise dasselbe Bild wie {name} in der Bibliothek ({distances})",
-  "{same} found: resizes or re-exports of photos in the library": "{same} gefunden: verkleinerte oder neu exportierte Fotos aus der Bibliothek"
+  "{same} found: resizes or re-exports of photos in the library": "{same} gefunden: verkleinerte oder neu exportierte Fotos aus der Bibliothek",
+  "{digested} of {photos} photos fingerprinted · {embedded} of {photos} embedded": "{digested} von {photos} Fotos mit Fingerabdruck · {embedded} von {photos} eingebettet",
+  "{digested} of {photos} photos fingerprinted": "{digested} von {photos} Fotos mit Fingerabdruck",
+  "{done:.2} of {total:.2} GB · {file}": "{done:.2} von {total:.2} GB · {file}",
+  "The download didn't work: {e}": "Der Download hat nicht funktioniert: {e}",
+  "Download the model ({size})": "Modell herunterladen ({size})",
+  "{size} on disk": "{size} auf dem Datenträger",
+  " · {mb} MB in memory while in use": " · {mb} MB im Arbeitsspeicher während der Nutzung",
+  "Remove the model ({size}) and this library's embeddings? Search by meaning stops until you download it again.": "Modell ({size}) und die Einbettungen dieser Bibliothek entfernen? Die Suche nach Bedeutung ruht, bis Sie es erneut herunterladen.",
+  "Saved in {dir}": "Gespeichert in {dir}",
+  "{name} · commercial use allowed": "{name} · kommerzielle Nutzung erlaubt",
+  "No photos look like {name}": "Keine Fotos sehen aus wie {name}",
+  "Ranked: “{query}” · by words and meaning": "Nach Relevanz: „{query}“ · nach Wörtern und Bedeutung",
+  "Looks like {name}": "Sieht aus wie {name}"
 }

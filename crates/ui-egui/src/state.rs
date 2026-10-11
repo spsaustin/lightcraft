@@ -498,6 +498,9 @@ pub struct UiState {
     /// Transient toast text, expiry (seconds of app time), and optional colour-label styling.
     #[serde(skip)]
     pub toast: Option<(String, f64, Option<lightcraft_catalog::ColorLabel>)>,
+    /// A button in the toast (e.g. "Open Settings ▸ Search"), for as long as the toast shows `text`.
+    #[serde(skip)]
+    pub toast_action: Option<ToastAction>,
     /// The result of the last Find Missing Photos (it searches in the background).
     #[serde(skip)]
     pub last_find_missing: Option<serde_json::Value>,
@@ -527,10 +530,21 @@ pub struct OnlyOrigin {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum OnlyKind {
-    /// `search.text`: the results of this query, best first.
-    Ranked { query: String },
+    /// `search.text`: the results of this query, best first; `meaning` when the vector lane ranked them too.
+    Ranked { query: String, meaning: bool },
     /// `photo.duplicates`: the photo (by file name) and the photos that are the same picture.
     Duplicates { name: String },
+    /// `photo.similar`: the photo (by file name) and the pictures that look like it, best first.
+    LooksLike { name: String },
+}
+
+/// The button a toast offers: its label and the command it runs (`app.run`), shown while the toast says `text`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ToastAction {
+    pub text: String,
+    pub label: String,
+    pub command: String,
+    pub params: serde_json::Value,
 }
 
 /// Settings group ids (`SettingsGroup` serde names) a new preset includes by default: everything
@@ -749,6 +763,15 @@ pub enum Dialog {
         #[serde(default)]
         error: Option<String>,
     },
+    /// The SigLIP 2 model behind search by meaning (Settings ▸ Search): its terms and the "I accept" box before
+    /// `vera.model.download`. `info` is the engine's `vera.model.status`.
+    VeraModel {
+        info: serde_json::Value,
+        accepted: bool,
+        /// Why the download could not start (shown in the dialog).
+        #[serde(default)]
+        error: Option<String>,
+    },
     /// Confirm moving photos to Recently Deleted.
     ConfirmDelete {
         count: usize,
@@ -906,6 +929,7 @@ impl Default for UiState {
             compare: None,
             reference: None,
             toast: None,
+            toast_action: None,
             last_find_missing: None,
             status: String::new(),
             dialog: None,

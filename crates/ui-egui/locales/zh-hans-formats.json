@@ -238,5 +238,18 @@
   "PDQ {pdq} of 256 bits apart, pHash {phash} of 64": "PDQ：256 位中有 {pdq} 位不同，pHash：64 位中有 {phash} 位",
   "The same picture as {name} in the library ({distances})": "与图库中的 {name} 是同一张图像（{distances}）",
   "Possibly the same picture as {name} in the library ({distances})": "可能与图库中的 {name} 是同一张图像（{distances}）",
-  "{same} found: resizes or re-exports of photos in the library": "找到 {same} 张：图库中照片的缩放版或重新导出版"
+  "{same} found: resizes or re-exports of photos in the library": "找到 {same} 张：图库中照片的缩放版或重新导出版",
+  "{digested} of {photos} photos fingerprinted · {embedded} of {photos} embedded": "已生成指纹 {digested}/{photos} 张 · 已嵌入 {embedded}/{photos} 张",
+  "{digested} of {photos} photos fingerprinted": "已生成指纹 {digested}/{photos} 张",
+  "{done:.2} of {total:.2} GB · {file}": "{done:.2} / {total:.2} GB · {file}",
+  "The download didn't work: {e}": "下载失败：{e}",
+  "Download the model ({size})": "下载模型（{size}）",
+  "{size} on disk": "磁盘占用 {size}",
+  " · {mb} MB in memory while in use": " · 使用时占用内存 {mb} MB",
+  "Remove the model ({size}) and this library's embeddings? Search by meaning stops until you download it again.": "移除模型（{size}）和此图库的嵌入？在重新下载之前，按含义搜索将停止。",
+  "Saved in {dir}": "保存在 {dir}",
+  "{name} · commercial use allowed": "{name} · 允许商业使用",
+  "No photos look like {name}": "没有与 {name} 相似的照片",
+  "Ranked: “{query}” · by words and meaning": "按相关性：“{query}” · 按字词和含义",
+  "Looks like {name}": "与 {name} 相似"
 }

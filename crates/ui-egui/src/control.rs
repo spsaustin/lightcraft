@@ -340,7 +340,10 @@ pub fn handle(app: &mut LightcraftApp, ctx: &egui::Context, req: &ControlRequest
                 if (r.is_err()
                     && matches!(
                         d,
-                        crate::state::Dialog::Import { .. } | crate::state::Dialog::SamModel { .. } | crate::state::Dialog::SmartRules { .. }
+                        crate::state::Dialog::Import { .. }
+                            | crate::state::Dialog::SamModel { .. }
+                            | crate::state::Dialog::SmartRules { .. }
+                            | crate::state::Dialog::VeraModel { .. }
                     ))
                     || (r.is_ok() && crate::panels::dialogs::keeps_open(app, &d))
                 {

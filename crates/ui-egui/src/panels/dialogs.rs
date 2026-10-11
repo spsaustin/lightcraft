@@ -99,6 +99,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
         Dialog::DenoiseModel { .. } => "AI Denoise Model",
         Dialog::FaceModel { info, .. } if info["download"].is_string() => "Download Face Model",
         Dialog::FaceModel { .. } => "Add Face Model",
+        Dialog::VeraModel { .. } => "Download the SigLIP 2 Model",
         Dialog::WhatsNew => "What's New",
         Dialog::Cull { .. } => "Assisted Culling",
         Dialog::SmartRules { id: None, .. } => "New Smart Album",
@@ -139,7 +140,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
             Dialog::Import { .. } => crate::import::DIALOG_SIZE[0],
             Dialog::SmartRules { .. } => 680.0,
             Dialog::AllMetadata { .. } => 620.0,
-            Dialog::FaceModel { .. } => 460.0,
+            Dialog::FaceModel { .. } | Dialog::VeraModel { .. } => 460.0,
             _ => 380.0,
         })
         .show(ctx, |ui| {
@@ -193,6 +194,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 }
                 Dialog::DenoiseModel { info, accepted } => crate::panels::denoise::model_dialog(app, ui, &t, info, accepted),
                 Dialog::FaceModel { info, accepted, .. } => crate::panels::faces::model_dialog(app, ui, &t, info, accepted),
+                Dialog::VeraModel { info, accepted, error } => crate::panels::vera_settings::licence_dialog(app, ui, &t, info, accepted, error.as_deref()),
                 Dialog::SystemInfo { rows } => {
                     egui::Grid::new("sysinfo").num_columns(2).spacing([16.0, 4.0]).striped(true).show(ui, |ui| {
                         for (k, v) in rows.iter() {
@@ -981,6 +983,8 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     Dialog::DenoiseModel { .. } => "Install",
                     Dialog::FaceModel { info, .. } if !informational && info["download"].is_string() => "Download",
                     Dialog::FaceModel { .. } if !informational => "Install",
+                    Dialog::VeraModel { error: Some(_), .. } => "Try Again",
+                    Dialog::VeraModel { .. } => "Download",
                     Dialog::ConfirmDelete { .. } | Dialog::DeleteKeyword { .. } => "Delete",
                     // (not "Merge": that is photo merging, HDR / panorama, in some languages)
                     Dialog::MoveKeyword { .. } => "Merge Keywords",
@@ -1001,7 +1005,10 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 let can_confirm = informational
                     || !matches!(
                         &dlg,
-                        Dialog::DenoiseModel { accepted: false, .. } | Dialog::FaceModel { accepted: false, .. } | Dialog::SynchronizeFolder { counts: None, .. }
+                        Dialog::DenoiseModel { accepted: false, .. }
+                            | Dialog::FaceModel { accepted: false, .. }
+                            | Dialog::VeraModel { accepted: false, .. }
+                            | Dialog::SynchronizeFolder { counts: None, .. }
                     )
                         // smart-album rules that can't mean anything wait to be fixed
                         && !matches!(&dlg, Dialog::SmartRules { id, rules, .. } if !rules.check_for(&app.session.catalog, id.map(lightcraft_catalog::AlbumId)).is_empty());
@@ -1051,8 +1058,8 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 app.toast(ctx, e)
             }
             // the SAM 3 dialog stays open to show the download (or why it can't start)
-            Err(e) if matches!(dlg, Dialog::SamModel { .. }) => {
-                if let Dialog::SamModel { error, .. } = &mut dlg {
+            Err(e) if matches!(dlg, Dialog::SamModel { .. } | Dialog::VeraModel { .. }) => {
+                if let Dialog::SamModel { error, .. } | Dialog::VeraModel { error, .. } = &mut dlg {
                     *error = Some(e);
                 }
             }
@@ -1327,6 +1334,7 @@ pub fn confirm_dialog(app: &mut LightcraftApp, dlg: &Dialog) -> Result<serde_jso
         Dialog::AutoStack { gap } => app.run("stack.auto", json!({"gap": gap})),
         Dialog::DenoiseModel { info, accepted } => crate::panels::denoise::install(app, info, *accepted),
         Dialog::FaceModel { path, info, accepted } => crate::panels::faces::install(app, path, info, *accepted),
+        Dialog::VeraModel { accepted, .. } => crate::panels::vera_settings::download(app, *accepted),
         Dialog::AllMetadata { .. } | Dialog::SystemInfo { .. } | Dialog::WhatsNew => Ok(serde_json::Value::Null),
         Dialog::Cull { reject_below, pick_best } => {
             let mut p = json!({"pickBest": pick_best});

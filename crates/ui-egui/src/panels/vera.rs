@@ -1,7 +1,8 @@
-//! VERA in the app (`docs/vera.md`): fingerprinting the library in the background, the ranked search the search field
-//! runs on Enter, and Show Duplicates. The engine does the work (`vera.pump`, `search.text`, `photo.duplicates`); this
-//! module decides when to call it, names what the grid shows in its chip ("Ranked: “dog”", "Duplicates of
-//! IMG_0042.JPG") and puts the view back when those results go.
+//! VERA in the app (`docs/vera.md`): fingerprinting and embedding the library in the background, the ranked search the
+//! search field runs on Enter, Show Duplicates and Find Photos That Look Alike. The engine does the work (`vera.pump`,
+//! `search.text`, `photo.duplicates`, `photo.similar`); this module decides when to call it, names what the grid shows
+//! in its chip ("Ranked: “dog”", "Duplicates of IMG_0042.JPG", "Looks like IMG_0042.JPG") and puts the view back when
+//! those results go. Settings ▸ Search, with the model download, is `panels::vera_settings`.
 
 use lightcraft_catalog::{PhotoId, Sort, SortKey};
 use serde_json::{Value, json};
@@ -15,6 +16,8 @@ pub fn pump(app: &mut LightcraftApp, ctx: &egui::Context) {
     // results whose `only` list was replaced or cleared some other way (an agent, Find Similar) are over
     sync(app);
     let now = ctx.input(|i| i.time);
+    // a model download the user started: followed until it ends
+    super::vera_settings::watch(app, ctx, now);
     if now < app.caches.vera_next_pump {
         return;
     }
@@ -23,10 +26,12 @@ pub fn pump(app: &mut LightcraftApp, ctx: &egui::Context) {
     app.caches.vera_pace = pace;
     app.caches.vera_pending = v["pending"].as_u64().unwrap_or(0);
     app.caches.vera_digested = v["digested"].as_u64().unwrap_or(0);
+    // the vector lane, when it runs: its pictures go to the worker and come back through the same call
+    app.caches.vera_embedding = (v["embedding"]["pending"].as_u64().unwrap_or(0), v["embedding"]["embedded"].as_u64().unwrap_or(0));
     let photos = v["photos"].as_u64().unwrap_or(0);
     // as for the face scan: called again in 50 ms while there is work, looked at again every few seconds once it is
     // done (new photos are fingerprinted soon after they arrive), and nothing asked for while the library is empty
-    let (next, wait) = schedule(app.caches.vera_pending, photos);
+    let (next, wait) = schedule(app.caches.vera_pending.saturating_add(app.caches.vera_embedding.0), photos);
     app.caches.vera_next_pump = now + next;
     if let Some(secs) = wait {
         ctx.request_repaint_after(std::time::Duration::from_secs_f64(secs));
@@ -51,8 +56,20 @@ pub fn ranked_search(app: &mut LightcraftApp, ctx: &egui::Context, query: &str) 
     }
     sync(app);
     let sort = return_sort(app);
-    match app.session.execute("search.text", &json!({"query": query})) {
+    let r = app.session.execute("search.text", &json!({"query": query}));
+    // the vector lane should have run and could not: said once (the search still ran, by words)
+    let warning = r.as_ref().ok().and_then(|r| r["warning"].as_str()).map(str::to_string);
+    let warned = match warning {
+        Some(w) if app.caches.vera_warning.as_deref() != Some(w.as_str()) => {
+            app.toast_error(ctx, w.clone());
+            app.caches.vera_warning = Some(w);
+            true
+        }
+        _ => false,
+    };
+    match r {
         Ok(r) if r["filtered"] == true => {
+            let meaning = r["lanes"].as_array().is_some_and(|l| l.iter().any(|x| x == "vector"));
             // the live filter from typing would narrow the ranked list: the ranking replaces it (the field keeps the words)
             if !app.session.filter.text.is_empty() {
                 let _ = app.session.execute("library.filter", &json!({"text": ""}));
@@ -62,8 +79,10 @@ pub fn ranked_search(app: &mut LightcraftApp, ctx: &egui::Context, query: &str) 
             if let Some(best) = ids.first().filter(|_| app.session.active().is_none_or(|a| !ids.contains(&a))) {
                 let _ = app.session.execute("library.select", &json!({"ids": [best.0]}));
             }
-            app.ui.only_origin = Some(OnlyOrigin { kind: OnlyKind::Ranked { query: query.to_string() }, ids, sort: Some(sort) });
+            app.ui.only_origin = Some(OnlyOrigin { kind: OnlyKind::Ranked { query: query.to_string(), meaning }, ids, sort: Some(sort) });
         }
+        // (the warning just shown says more than "nothing found")
+        Ok(_) if warned => {}
         Ok(_) => app.toast(ctx, crate::i18n::tr_format!("No photos match “{query}”", query = query)),
         Err(e) => app.toast_error(ctx, e.to_string()),
     }
@@ -84,7 +103,12 @@ pub fn show_duplicates(app: &mut LightcraftApp, ctx: &egui::Context, id: Option<
         // the engine shows the photo alone; there is nothing to compare, so the view goes back to what it was
         let _ = app.session.execute("library.filter", &json!({"only": before}));
         let pending = r["pendingDigests"].as_u64().unwrap_or(0);
-        app.toast(ctx, none_found(&name, pending));
+        // the `similar` tier (crops, look-alikes) needs the vector lane: say where to switch it on
+        let off = meaning_off(app);
+        app.toast_for(ctx, none_found(&name, pending, off), if off { 8.0 } else { crate::TOAST_SECONDS });
+        if off {
+            offer_settings(app);
+        }
         return Ok(r);
     }
     note_duplicates(app, &name, sort);
@@ -100,12 +124,96 @@ pub(crate) fn note_duplicates(app: &mut LightcraftApp, name: &str, sort: Option<
     app.ui.only_origin = Some(OnlyOrigin { kind: OnlyKind::Duplicates { name: name.to_string() }, ids, sort });
 }
 
-/// The toast when a photo has no duplicates (yet: some photos may not have their fingerprints).
-fn none_found(name: &str, pending: u64) -> String {
-    if pending > 0 {
+/// The toast when a photo has no duplicates (yet: some photos may not have their fingerprints; and crops are found
+/// only by meaning, when that is `off`).
+fn none_found(name: &str, pending: u64, off: bool) -> String {
+    let mut text = if pending > 0 {
         crate::i18n::tr_format!("No duplicates of {name} found yet · {pending} photos still to fingerprint", name = name, pending = pending)
     } else {
         crate::i18n::tr_format!("No duplicates of {name} found", name = name)
+    };
+    if off {
+        text.push_str(crate::i18n::tr(" · search by meaning is off: Settings → Search"));
+    }
+    text
+}
+
+/// The vector lane's state (`vera.status`) and whether the session has a folder to keep its model in.
+fn vector_state(app: &mut LightcraftApp) -> (String, String, bool) {
+    let st = app.session.execute("vera.status", &json!({})).unwrap_or(Value::Null);
+    let v = &st["lanes"]["vector"];
+    let state = v["state"].as_str().unwrap_or("").to_string();
+    let reason = v["reason"].as_str().unwrap_or("").to_string();
+    (state, reason, app.session.vera_model_dir.is_some())
+}
+
+/// Whether search by meaning is off in a way Settings ▸ Search can change: switched off, or its model not downloaded
+/// (and there is somewhere to keep it).
+fn meaning_off(app: &mut LightcraftApp) -> bool {
+    let (state, _, has_dir) = vector_state(app);
+    state == "disabled_by_user" || (state == "needs_model" && has_dir)
+}
+
+/// The toast just shown gets a button that opens Settings ▸ Search.
+fn offer_settings(app: &mut LightcraftApp) {
+    let Some((text, ..)) = &app.ui.toast else { return };
+    app.ui.toast_action = Some(crate::state::ToastAction {
+        text: text.clone(),
+        label: crate::i18n::tr("Open Settings → Search").to_string(),
+        command: "app.settings".into(),
+        params: json!({"tab": "search"}),
+    });
+}
+
+/// Photo ▸ Find Photos That Look Alike (`photo.showLookAlikes`): the grid shows photo `id` (the active one by
+/// default) and the pictures nearest to it by the vector lane (`photo.similar`), best first, under a "Looks like …"
+/// chip. None above the noise ceiling: the view stays as it was. The lane not ready: a toast says why, with a button
+/// to Settings ▸ Search when that is where it is fixed; the command's error is returned for agents.
+pub fn show_look_alikes(app: &mut LightcraftApp, ctx: &egui::Context, id: Option<PhotoId>) -> Result<Value, String> {
+    sync(app);
+    let id = id.or_else(|| app.session.active()).ok_or_else(|| crate::i18n::tr("No photo selected").to_string())?;
+    let name = app.session.catalog.photo(id).map(|p| p.file_name.clone()).ok_or_else(|| format!("no photo {}", id.0))?;
+    let sort = return_sort(app);
+    let r = match app.session.execute("photo.similar", &json!({"id": id.0, "filter": true})) {
+        Ok(r) => r,
+        Err(e) => {
+            let e = e.to_string();
+            not_ready(app, ctx, &e);
+            return Err(e);
+        }
+    };
+    if r["filtered"] != true {
+        app.toast(ctx, crate::i18n::tr_format!("No photos look like {name}", name = name));
+        return Ok(r);
+    }
+    let ids = app.session.filter.only.clone();
+    app.ui.only_origin = Some(OnlyOrigin { kind: OnlyKind::LooksLike { name }, ids, sort: Some(sort) });
+    if !matches!(app.ui.view, ViewMode::PhotoGrid | ViewMode::SquareGrid) {
+        app.ui.view = ViewMode::PhotoGrid;
+    }
+    Ok(r)
+}
+
+/// The toast when the vector lane cannot answer `photo.similar` (its `error`), in the app's words where the engine's
+/// are written for agents.
+fn not_ready(app: &mut LightcraftApp, ctx: &egui::Context, error: &str) {
+    let (state, reason, has_dir) = vector_state(app);
+    let (text, offer) = match state.as_str() {
+        "needs_model" if has_dir => {
+            (crate::i18n::tr("Finding photos that look alike needs the SigLIP 2 model: a one-time download, in Settings → Search.").to_string(), true)
+        }
+        "disabled_by_user" => {
+            (crate::i18n::tr("Search by meaning is switched off for this library: Settings → Search switches it on.").to_string(), true)
+        }
+        "downloading" => {
+            (crate::i18n::tr("The SigLIP 2 model is still downloading: Find Photos That Look Alike works once it is in place.").to_string(), false)
+        }
+        "live" => (super::faces::sentence(error.rsplit(": ").next().unwrap_or(error)), false),
+        _ => (reason, false),
+    };
+    app.toast_for(ctx, text, 8.0);
+    if offer {
+        offer_settings(app);
     }
 }
 
@@ -139,7 +247,7 @@ pub fn sync(app: &mut LightcraftApp) {
         let _ = app.session.execute("library.sort", &serde_json::to_value(sort).unwrap_or_default());
     }
     // the words in the search field were the ranked results' query: they go with them
-    if let OnlyKind::Ranked { query } = &origin.kind
+    if let OnlyKind::Ranked { query, .. } = &origin.kind
         && app.ui.search.trim() == query
         && app.session.filter.text.is_empty()
     {
@@ -147,18 +255,28 @@ pub fn sync(app: &mut LightcraftApp) {
     }
 }
 
-/// What the chip for the filter's `only` list says, when it came from a ranked search or Show Duplicates.
+/// What the chip for the filter's `only` list says, when it came from a ranked search, Show Duplicates or Find Photos
+/// That Look Alike.
 pub fn only_label(app: &LightcraftApp) -> Option<String> {
     let origin = app.ui.only_origin.as_ref().filter(|o| o.ids == app.session.filter.only)?;
     Some(match &origin.kind {
-        OnlyKind::Ranked { query } => crate::i18n::tr_format!("Ranked: “{query}”", query = query),
+        OnlyKind::Ranked { query, meaning: false } => crate::i18n::tr_format!("Ranked: “{query}”", query = query),
+        OnlyKind::Ranked { query, meaning: true } => crate::i18n::tr_format!("Ranked: “{query}” · by words and meaning", query = query),
         OnlyKind::Duplicates { name } => crate::i18n::tr_format!("Duplicates of {name}", name = name),
+        OnlyKind::LooksLike { name } => crate::i18n::tr_format!("Looks like {name}", name = name),
     })
 }
 
-/// `ui.inspect` → `vera`: how far background fingerprinting has got and the pace it was last given.
+/// `ui.inspect` → `vera`: how far background fingerprinting (and embedding, when the vector lane runs) has got and the
+/// pace it was last given.
 pub fn inspect(app: &LightcraftApp) -> Value {
-    json!({"pending": app.caches.vera_pending, "digested": app.caches.vera_digested, "pace": app.caches.vera_pace})
+    let (pending, embedded) = app.caches.vera_embedding;
+    json!({
+        "pending": app.caches.vera_pending,
+        "digested": app.caches.vera_digested,
+        "pace": app.caches.vera_pace,
+        "embedding": {"pending": pending, "embedded": embedded},
+    })
 }
 
 #[cfg(test)]
@@ -174,7 +292,8 @@ mod tests {
 
     #[test]
     fn no_duplicates_says_whether_fingerprints_are_still_coming() {
-        assert_eq!(none_found("a.jpg", 0), "No duplicates of a.jpg found");
-        assert_eq!(none_found("a.jpg", 3), "No duplicates of a.jpg found yet · 3 photos still to fingerprint");
+        assert_eq!(none_found("a.jpg", 0, false), "No duplicates of a.jpg found");
+        assert_eq!(none_found("a.jpg", 3, false), "No duplicates of a.jpg found yet · 3 photos still to fingerprint");
+        assert_eq!(none_found("a.jpg", 0, true), "No duplicates of a.jpg found · search by meaning is off: Settings → Search");
     }
 }

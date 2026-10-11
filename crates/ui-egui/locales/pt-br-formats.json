@@ -238,5 +238,18 @@
   "PDQ {pdq} of 256 bits apart, pHash {phash} of 64": "PDQ: {pdq} de 256 bits diferentes, pHash: {phash} de 64",
   "The same picture as {name} in the library ({distances})": "A mesma imagem que {name} na biblioteca ({distances})",
   "Possibly the same picture as {name} in the library ({distances})": "Possivelmente a mesma imagem que {name} na biblioteca ({distances})",
-  "{same} found: resizes or re-exports of photos in the library": "{same} encontradas: fotos da biblioteca redimensionadas ou reexportadas"
+  "{same} found: resizes or re-exports of photos in the library": "{same} encontradas: fotos da biblioteca redimensionadas ou reexportadas",
+  "{digested} of {photos} photos fingerprinted · {embedded} of {photos} embedded": "{digested} de {photos} fotos com impressão digital · {embedded} de {photos} incorporadas",
+  "{digested} of {photos} photos fingerprinted": "{digested} de {photos} fotos com impressão digital",
+  "{done:.2} of {total:.2} GB · {file}": "{done:.2} de {total:.2} GB · {file}",
+  "The download didn't work: {e}": "O download não funcionou: {e}",
+  "Download the model ({size})": "Baixar o modelo ({size})",
+  "{size} on disk": "{size} em disco",
+  " · {mb} MB in memory while in use": " · {mb} MB na memória durante o uso",
+  "Remove the model ({size}) and this library's embeddings? Search by meaning stops until you download it again.": "Remover o modelo ({size}) e as incorporações desta biblioteca? A busca por significado para até você baixá-lo novamente.",
+  "Saved in {dir}": "Salvo em {dir}",
+  "{name} · commercial use allowed": "{name} · uso comercial permitido",
+  "No photos look like {name}": "Nenhuma foto se parece com {name}",
+  "Ranked: “{query}” · by words and meaning": "Por relevância: “{query}” · por palavras e significado",
+  "Looks like {name}": "Parecidas com {name}"
 }

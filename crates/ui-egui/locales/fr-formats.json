@@ -238,5 +238,18 @@
   "PDQ {pdq} of 256 bits apart, pHash {phash} of 64": "PDQ : {pdq} bits sur 256 diffèrent, pHash : {phash} sur 64",
   "The same picture as {name} in the library ({distances})": "La même image que {name} dans la bibliothèque ({distances})",
   "Possibly the same picture as {name} in the library ({distances})": "Peut-être la même image que {name} dans la bibliothèque ({distances})",
-  "{same} found: resizes or re-exports of photos in the library": "{same} trouvées : photos de la bibliothèque redimensionnées ou réexportées"
+  "{same} found: resizes or re-exports of photos in the library": "{same} trouvées : photos de la bibliothèque redimensionnées ou réexportées",
+  "{digested} of {photos} photos fingerprinted · {embedded} of {photos} embedded": "{digested} photos sur {photos} avec empreinte · {embedded} sur {photos} vectorisées",
+  "{digested} of {photos} photos fingerprinted": "{digested} photos sur {photos} avec empreinte",
+  "{done:.2} of {total:.2} GB · {file}": "{done:.2} sur {total:.2} Go · {file}",
+  "The download didn't work: {e}": "Le téléchargement a échoué : {e}",
+  "Download the model ({size})": "Télécharger le modèle ({size})",
+  "{size} on disk": "{size} sur le disque",
+  " · {mb} MB in memory while in use": " · {mb} Mo en mémoire pendant l’utilisation",
+  "Remove the model ({size}) and this library's embeddings? Search by meaning stops until you download it again.": "Supprimer le modèle ({size}) et les vecteurs de cette bibliothèque ? La recherche par le sens s’arrête jusqu’à ce que vous le téléchargiez à nouveau.",
+  "Saved in {dir}": "Enregistré dans {dir}",
+  "{name} · commercial use allowed": "{name} · usage commercial autorisé",
+  "No photos look like {name}": "Aucune photo ne ressemble à {name}",
+  "Ranked: “{query}” · by words and meaning": "Par pertinence : « {query} » · par les mots et le sens",
+  "Looks like {name}": "Ressemble à {name}"
 }

@@ -155,6 +155,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("photo.editInExternal", "Edit in External Editor", Some("Cmd+Shift+E"), "Photo"),
     // {id?}: the photo (the active one) and the photos that are the same picture, by fingerprint (`photo.duplicates`)
     ("photo.showDuplicates", "Show Duplicates", None, "Photo"),
+    // {id?}: the photo (the active one) and the pictures that look like it, by the vector lane (`photo.similar`)
+    ("photo.showLookAlikes", "Find Photos That Look Alike", None, "Photo"),
     ("dialog.mergeHdr", "HDR…", Some("Ctrl+H"), "Photo>Photo Merge"),
     ("dialog.mergePanorama", "Panorama…", Some("Ctrl+M"), "Photo>Photo Merge"),
     ("dialog.mergeHdrPanorama", "HDR Panorama…", None, "Photo>Photo Merge"),
@@ -966,6 +968,10 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             let id = p.get("id").and_then(Value::as_u64).map(lightcraft_catalog::PhotoId);
             crate::panels::vera::show_duplicates(app, &ctx, id)
         }
+        "photo.showLookAlikes" => {
+            let id = p.get("id").and_then(Value::as_u64).map(lightcraft_catalog::PhotoId);
+            crate::panels::vera::show_look_alikes(app, &ctx, id)
+        }
         "view.focusSearch" => {
             // the search field lives in the top bar of the library and detail views alike
             app.ui.focus_search = true;
@@ -1604,7 +1610,8 @@ pub fn ui_enabled(app: &LightcraftApp, id: &str) -> bool {
         | "dialog.rename"
         | "dialog.captureTime"
         | "dialog.copySettings"
-        | "photo.showDuplicates" => app.session.active().is_some(),
+        | "photo.showDuplicates"
+        | "photo.showLookAlikes" => app.session.active().is_some(),
         "photo.tagFromTracklog" => app.session.active().is_some() && app.services.pick_tracklog.is_some(),
         "app.exportPrevious" => app.session.active().is_some() && app.session.last_export.is_some(),
         "dialog.pasteSettings" => app.session.active().is_some() && app.session.clipboard.is_some(),

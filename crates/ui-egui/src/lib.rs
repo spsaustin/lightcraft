@@ -91,6 +91,8 @@ mod tests_unsaved;
 #[cfg(test)]
 mod tests_vera;
 #[cfg(test)]
+mod tests_vera_lane;
+#[cfg(test)]
 mod tests_zoom;
 #[cfg(test)]
 mod tests_zoom_keys;
@@ -1242,6 +1244,16 @@ pub struct Caches {
     pub vera_digested: u64,
     pub vera_pending: u64,
     pub vera_next_pump: f64,
+    /// The vector lane's background embedding, as the pump last reported it: (pending, embedded).
+    pub vera_embedding: (u64, u64),
+    /// The search-by-meaning model download the user started (`panels::vera_settings`): followed until it ends, and
+    /// when to look at it again (at most once a second).
+    pub vera_dl_watch: bool,
+    pub vera_dl_next: f64,
+    /// Bumped by an action in Settings ▸ Search, so its next frame reads the engine afresh.
+    pub vera_epoch: u64,
+    /// The last `search.text` warning shown as a toast (each is shown once).
+    pub vera_warning: Option<String>,
     person_names: Option<(u64, std::sync::Arc<Vec<String>>)>,
     /// The grid's date runs, layout and indexes (by the visible list's generation).
     pub grid: panels::grid::GridCache,
