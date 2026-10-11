@@ -72,6 +72,9 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
     let max_height = (ctx.content_rect().height() - t.top_bar_h - 60.0).max(80.0);
     let mut cancel = None;
     let mut toggle = false;
+    let mut review = false;
+    // Describe's row offers its proposals for review while the run brings them in
+    let proposals = app.caches.vera_describe.2;
     let frame = egui::Frame::NONE.fill(t.chrome).stroke(Stroke::new(1.0, t.field_border)).corner_radius(6).inner_margin(Margin::same(MARGIN));
     egui::Area::new(egui::Id::new("activity-stack")).order(egui::Order::Middle).fixed_pos(pos2(8.0, t.top_bar_h + 8.0)).show(ctx, |ui| {
         // An area lays out in the size it had last frame, and the scroll area would take that as all the room there
@@ -87,9 +90,12 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     if i > 0 {
                         ui.add_space(6.0);
                     }
-                    if row(ui, &t, task, inner) {
+                    let offer = (task.kind == "describe" && proposals > 0).then_some(proposals);
+                    let (cancelled, reviewed) = row(ui, &t, task, inner, offer);
+                    if cancelled {
                         cancel = Some(task.id);
                     }
+                    review |= reviewed;
                 }
             });
             if hidden > 0 || (app.activity_expanded && tasks.len() > MAX_ROWS) {
@@ -107,6 +113,9 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
     if toggle {
         app.activity_expanded = !app.activity_expanded;
     }
+    if review {
+        let _ = app.run("view.reviewDescriptions", json!({}));
+    }
 }
 
 /// ✕ on task `id`'s row. The task may have just finished or stopped being cancellable: nothing to tell the user then,
@@ -115,9 +124,11 @@ pub(crate) fn cancel(app: &mut LightcraftApp, id: u64) {
     let _ = app.session.execute("activity.cancel", &json!({"id": id}));
 }
 
-/// One task: name and ✕, the bar, the detail line. True when ✕ was clicked.
-fn row(ui: &mut egui::Ui, t: &Tokens, task: &TaskInfo, width: f32) -> bool {
+/// One task: name and ✕, the bar, the detail line, and (`review`: Describe's proposals so far) a link to review
+/// them. Whether ✕ and the link were clicked.
+fn row(ui: &mut egui::Ui, t: &Tokens, task: &TaskInfo, width: f32, review: Option<u64>) -> (bool, bool) {
     let mut clicked = false;
+    let mut reviewed = false;
     let r = ui.vertical(|ui| {
         ui.set_width(width);
         ui.horizontal(|ui| {
@@ -140,9 +151,15 @@ fn row(ui: &mut egui::Ui, t: &Tokens, task: &TaskInfo, width: f32) -> bool {
         if !line.is_empty() {
             ui.add(egui::Label::new(RichText::new(line).font(t.font(11.0)).color(t.text_dim)).truncate());
         }
+        if let Some(n) = review {
+            let text = tr_format!("{n} to review", n = n);
+            let r = ui.add(egui::Label::new(RichText::new(text).font(t.font(11.0)).color(t.accent)).sense(Sense::click()));
+            register(ui.ctx(), "activity:reviewDescriptions", r.rect);
+            reviewed = r.clicked();
+        }
     });
     register(ui.ctx(), format!("activity:row:{}", task.id), r.response.rect);
-    clicked
+    (clicked, reviewed)
 }
 
 /// The progress bar; while the amount of work isn't known, a segment sweeps across.

@@ -251,5 +251,19 @@
   "{name} · commercial use allowed": "{name} · коммерческое использование разрешено",
   "No photos look like {name}": "Нет фото, похожих на {name}",
   "Ranked: “{query}” · by words and meaning": "По релевантности: «{query}» · по словам и смыслу",
-  "Looks like {name}": "Похожие на {name}"
+  "Looks like {name}": "Похожие на {name}",
+  "Describing {n} photos with {host}: each description waits for your review": "Описываем {n} фото с помощью {host}: каждое описание ждёт вашей проверки",
+  "Suggesting keywords for {n} photos: they wait for your review": "Подбираем ключевые слова для {n} фото: они ждут вашей проверки",
+  "The endpoint at {host} needs an access token: Settings → Search.": "Эндпоинту {host} нужен токен доступа: Настройки → Поиск.",
+  "{n} descriptions wait for your review": "Описаний, ждущих проверки: {n}",
+  "Nothing to review yet · {n} photos are being described": "Пока нечего проверять · описывается фото: {n}",
+  "Proposed by {model} at {host}": "Предложено {model} на {host}",
+  "Proposed by {model}": "Предложено {model}",
+  "{n} to review": "На проверку: {n}",
+  "Reject all {n} proposals? Nothing is written to the photos.": "Отклонить все предложения ({n})? В фото ничего не записывается.",
+  "This session: {accepted} accepted · {rejected} rejected · {waiting} being described · {total} to review": "Этот сеанс: принято {accepted} · отклонено {rejected} · описывается {waiting} · на проверку {total}",
+  "Written by {model}": "Написано {model}",
+  "{who}, accepted {when}": "{who}, принято {when}",
+  "Error: {e}": "Ошибка: {e}",
+  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} — другой компьютер: отметьте поле выше, чтобы согласиться, прежде чем фото будут туда отправлены."
 }

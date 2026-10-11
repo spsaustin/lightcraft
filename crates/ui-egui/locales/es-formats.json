@@ -251,5 +251,19 @@
   "{name} · commercial use allowed": "{name} · uso comercial permitido",
   "No photos look like {name}": "Ninguna foto se parece a {name}",
   "Ranked: “{query}” · by words and meaning": "Por relevancia: «{query}» · por palabras y significado",
-  "Looks like {name}": "Se parece a {name}"
+  "Looks like {name}": "Se parece a {name}",
+  "Describing {n} photos with {host}: each description waits for your review": "Describiendo {n} fotos con {host}: cada descripción espera tu revisión",
+  "Suggesting keywords for {n} photos: they wait for your review": "Sugiriendo palabras clave para {n} fotos: esperan tu revisión",
+  "The endpoint at {host} needs an access token: Settings → Search.": "El endpoint en {host} necesita un token de acceso: Ajustes → Búsqueda.",
+  "{n} descriptions wait for your review": "{n} descripciones esperan tu revisión",
+  "Nothing to review yet · {n} photos are being described": "Nada que revisar aún · se están describiendo {n} fotos",
+  "Proposed by {model} at {host}": "Propuesto por {model} en {host}",
+  "Proposed by {model}": "Propuesto por {model}",
+  "{n} to review": "{n} por revisar",
+  "Reject all {n} proposals? Nothing is written to the photos.": "¿Rechazar las {n} propuestas? No se escribe nada en las fotos.",
+  "This session: {accepted} accepted · {rejected} rejected · {waiting} being described · {total} to review": "Esta sesión: {accepted} aceptadas · {rejected} rechazadas · {waiting} en curso · {total} por revisar",
+  "Written by {model}": "Escrito por {model}",
+  "{who}, accepted {when}": "{who}, aceptado el {when}",
+  "Error: {e}": "Error: {e}",
+  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} es otro equipo: marca la casilla de arriba para aceptar antes de enviar fotos allí."
 }

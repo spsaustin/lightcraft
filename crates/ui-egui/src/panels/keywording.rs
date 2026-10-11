@@ -56,7 +56,7 @@ pub fn names_row(app: &mut LightcraftApp, ui: &mut egui::Ui) {
 /// the name (cut short to fit the row) and, with `cross`, a × at its end. A `partial` one (only
 /// some of the selected photos) is dimmed and marked with an asterisk. Returns the name's response
 /// and the ×'s.
-fn chip(ui: &mut egui::Ui, path: &str, partial: bool, cross: bool) -> (egui::Response, Option<egui::Response>) {
+pub(crate) fn chip(ui: &mut egui::Ui, path: &str, partial: bool, cross: bool) -> (egui::Response, Option<egui::Response>) {
     use egui::{Align2, Rect, Sense, pos2, vec2};
     let t = Tokens::get(ui.ctx());
     let font = t.font(13.0);

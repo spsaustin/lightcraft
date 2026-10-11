@@ -157,6 +157,12 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("photo.showDuplicates", "Show Duplicates", None, "Photo"),
     // {id?}: the photo (the active one) and the pictures that look like it, by the vector lane (`photo.similar`)
     ("photo.showLookAlikes", "Find Photos That Look Alike", None, "Photo"),
+    // the selection (or the active photo) to Describe (`photo.describe`): proposals wait in Review Descriptions
+    ("photo.describeSelected", "Describe Photos…", None, "Photo"),
+    // keywords alone, from the search model on this computer (`photo.describe {keywordsOnly: true}`)
+    ("photo.keywordsSelected", "Suggest Keywords", None, "Photo"),
+    // Describe's proposals, one at a time: Accept, Reject or Skip each (`describe.list`, `describe.accept`)
+    ("view.reviewDescriptions", "Review Descriptions", None, "Window"),
     ("dialog.mergeHdr", "HDR…", Some("Ctrl+H"), "Photo>Photo Merge"),
     ("dialog.mergePanorama", "Panorama…", Some("Ctrl+M"), "Photo>Photo Merge"),
     ("dialog.mergeHdrPanorama", "HDR Panorama…", None, "Photo>Photo Merge"),
@@ -972,6 +978,9 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             let id = p.get("id").and_then(Value::as_u64).map(lightcraft_catalog::PhotoId);
             crate::panels::vera::show_look_alikes(app, &ctx, id)
         }
+        "photo.describeSelected" => crate::panels::describe_review::describe_selected(app, &ctx, false),
+        "photo.keywordsSelected" => crate::panels::describe_review::describe_selected(app, &ctx, true),
+        "view.reviewDescriptions" => crate::panels::describe_review::open(app, &ctx),
         "view.focusSearch" => {
             // the search field lives in the top bar of the library and detail views alike
             app.ui.focus_search = true;
@@ -1612,6 +1621,7 @@ pub fn ui_enabled(app: &LightcraftApp, id: &str) -> bool {
         | "dialog.copySettings"
         | "photo.showDuplicates"
         | "photo.showLookAlikes" => app.session.active().is_some(),
+        "photo.describeSelected" | "photo.keywordsSelected" => app.session.active().is_some() || !app.session.selection.ids.is_empty(),
         "photo.tagFromTracklog" => app.session.active().is_some() && app.services.pick_tracklog.is_some(),
         "app.exportPrevious" => app.session.active().is_some() && app.session.last_export.is_some(),
         "dialog.pasteSettings" => app.session.active().is_some() && app.session.clipboard.is_some(),

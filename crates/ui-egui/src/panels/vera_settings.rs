@@ -141,6 +141,230 @@ pub fn settings_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
     let r = ui.label(RichText::new(counts).font(t.font(11.5)).color(t.text_label));
     register(ui.ctx(), "vera:counts", r.rect);
     model_section(app, ui, t, &status, &model);
+    describe_section(app, ui, t);
+}
+
+/// The PRD's sentence, shown at the moment photos would leave this computer (the consent `allowRemoteHost` stands for).
+pub const REMOTE_CONSENT: &str = "Preview-sized copies of the frames you choose will be sent to this address. LightCraft does not operate it.";
+
+/// What the Describe section's fields hold while the user types: loaded from `vera.describe.config` when the section
+/// appears (or after a save), never holding the stored token (the token field starts empty and is cleared on save).
+#[derive(Clone, Default)]
+struct DescribeForm {
+    /// The frame it was last drawn on: a form not drawn last frame is loaded afresh.
+    pass: u64,
+    epoch: u64,
+    endpoint: String,
+    model: String,
+    token: String,
+    allow: bool,
+    /// "Replace" was clicked: the token field shows although a token is set.
+    replacing: bool,
+    error: Option<String>,
+}
+
+fn form_id() -> egui::Id {
+    egui::Id::new("vera-describe-form")
+}
+
+/// The host of an endpoint as typed (`http://127.0.0.1:11434/v1` → `127.0.0.1`), lower-cased; empty when there is none.
+pub(crate) fn endpoint_host(endpoint: &str) -> String {
+    let rest = endpoint.trim();
+    let rest = rest.split_once("://").map_or(rest, |(_, r)| r);
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host_port = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    let host = match host_port.strip_prefix('[') {
+        Some(v6) => v6.split(']').next().unwrap_or(""),
+        None => host_port.split(':').next().unwrap_or(""),
+    };
+    host.trim_end_matches('.').to_ascii_lowercase()
+}
+
+/// Whether an endpoint as typed is this computer (127.0.0.0/8, `::1`, `localhost`: where plain http and no consent
+/// are fine). The engine decides; this only says when to show the consent.
+pub(crate) fn is_loopback(endpoint: &str) -> bool {
+    let host = endpoint_host(endpoint);
+    host.is_empty()
+        || host == "localhost"
+        || host.ends_with(".localhost")
+        || host.parse::<std::net::Ipv4Addr>().is_ok_and(|ip| ip.is_loopback())
+        || host.parse::<std::net::Ipv6Addr>().is_ok_and(|ip| ip.is_loopback())
+}
+
+/// An engine error without its "invalid parameters for `command`: " opening (the app says what was refused itself).
+pub(crate) fn engine_message(e: &str) -> &str {
+    match e.strip_prefix("invalid parameters for `").and_then(|rest| rest.split_once("`: ")) {
+        Some((_, msg)) => msg,
+        None => e,
+    }
+}
+
+/// The Describe lane's state as the section's first line says it.
+pub(crate) fn describe_state_text(config: &Value) -> String {
+    let reason = config["reason"].as_str().unwrap_or("");
+    match config["state"].as_str().unwrap_or("") {
+        "live" => crate::i18n::tr("Ready").to_string(),
+        "needs_endpoint" => crate::i18n::tr("Needs an endpoint").to_string(),
+        "needs_token" => crate::i18n::tr("Needs a token").to_string(),
+        "error" => crate::i18n::tr_format!("Error: {e}", e = reason.strip_prefix("Describing photos cannot run: ").unwrap_or(reason)),
+        _ => reason.to_string(),
+    }
+}
+
+/// `vera.describe.config {}` (it changes nothing), re-read at most every [`REFRESH_SECS`], or at once after an action.
+fn describe_config(app: &mut LightcraftApp, ctx: &egui::Context) -> Value {
+    let id = egui::Id::new("vera-describe-config");
+    let now = ctx.input(|i| i.time);
+    let epoch = app.caches.vera_epoch;
+    if let Some((e, at, v)) = ctx.data(|d| d.get_temp::<(u64, f64, Value)>(id))
+        && e == epoch
+        && now - at < REFRESH_SECS
+    {
+        return v;
+    }
+    let v = app.session.execute("vera.describe.config", &json!({})).unwrap_or(Value::Null);
+    ctx.data_mut(|d| d.insert_temp(id, (epoch, now, v.clone())));
+    v
+}
+
+/// Settings ▸ Search ▸ Describe: the endpoint, its model name and token (write-only), and the consent when the endpoint
+/// is another computer. Applied with Return in a field or Save (`vera.describe.config`); the engine's refusal is shown
+/// in the section.
+fn describe_section(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
+    heading(ui, t, "Describe");
+    let ctx = ui.ctx().clone();
+    let config = describe_config(app, &ctx);
+    if config["state"] == "disabled" || config.is_null() {
+        hint(ui, t, "Describing photos runs in the desktop app.");
+        return;
+    }
+    let pass = ctx.cumulative_pass_nr();
+    let epoch = app.caches.vera_epoch;
+    let mut form = ctx.data(|d| d.get_temp::<DescribeForm>(form_id())).unwrap_or_default();
+    if form.pass.checked_add(1) != Some(pass) || form.epoch != epoch {
+        form = DescribeForm {
+            endpoint: config["endpoint"].as_str().unwrap_or("").to_string(),
+            model: config["model"].as_str().unwrap_or("").to_string(),
+            allow: config["allowRemoteHost"] == true,
+            epoch,
+            ..Default::default()
+        };
+    }
+    form.pass = pass;
+    // the state, live
+    let state = config["state"].as_str().unwrap_or("");
+    let colour = match state {
+        "live" => t.accent,
+        "error" => t.caution,
+        _ => t.text_dim,
+    };
+    ui.horizontal_wrapped(|ui| {
+        let r = ui.add(egui::Label::new(RichText::new(describe_state_text(&config)).font(t.semibold(11.5)).color(colour)).wrap());
+        register(ui.ctx(), "vera:describe:state", r.rect);
+        if state == "live"
+            && let Some(host) = config["endpoint"].as_str()
+        {
+            ui.label(RichText::new(format!("· {}", endpoint_host(host))).font(t.font(11.5)).color(t.text_dim));
+        }
+    });
+    let mut save = false;
+    let token_set = config["tokenSet"] == true;
+    egui::Grid::new("vera-describe").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
+        ui.label(RichText::new(crate::i18n::tr("Endpoint")).color(t.text_label));
+        let r = crate::text_field::TextField::singleline("field:describe.endpoint", &mut form.endpoint)
+            .hint("http://127.0.0.1:11434")
+            .width(360.0)
+            .show(ui);
+        save |= r.ending == Some(crate::text_field::Ending::Return);
+        ui.end_row();
+        ui.label(RichText::new(crate::i18n::tr("Model")).color(t.text_label));
+        let r = crate::text_field::TextField::singleline("field:describe.model", &mut form.model)
+            .hint(crate::i18n::tr("The server's model name, e.g. qwen2.5vl"))
+            .width(360.0)
+            .show(ui);
+        save |= r.ending == Some(crate::text_field::Ending::Return);
+        ui.end_row();
+        ui.label(RichText::new(crate::i18n::tr("Token")).color(t.text_label));
+        if token_set && !form.replacing {
+            ui.horizontal(|ui| {
+                let r = ui.label(RichText::new(crate::i18n::tr("Token set")).color(t.text));
+                register(ui.ctx(), "vera:describe:tokenSet", r.rect);
+                ui.label(RichText::new("·").color(t.text_dim));
+                let r = ui.link(crate::i18n::tr("Replace"));
+                register(ui.ctx(), "button:describeTokenReplace", r.rect);
+                if r.clicked() {
+                    form.replacing = true;
+                }
+                ui.label(RichText::new("/").color(t.text_dim));
+                let r = ui.link(crate::i18n::tr("Clear"));
+                register(ui.ctx(), "button:describeTokenClear", r.rect);
+                if r.clicked() {
+                    match app.session.execute("vera.describe.config", &json!({"token": null})) {
+                        Ok(_) => form.error = None,
+                        Err(e) => form.error = Some(super::faces::sentence(engine_message(&e.to_string()))),
+                    }
+                    app.caches.vera_epoch += 1;
+                    form.epoch = app.caches.vera_epoch;
+                }
+            });
+        } else {
+            let r = crate::text_field::TextField::singleline("field:describe.token", &mut form.token)
+                .password(true)
+                .hint(crate::i18n::tr(if token_set { "A new token" } else { "Only for a server that asks for one" }))
+                .width(360.0)
+                .show(ui);
+            save |= r.ending == Some(crate::text_field::Ending::Return);
+        }
+        ui.end_row();
+    });
+    // photos would leave this computer: the user agrees first, in the PRD's words
+    let remote = !is_loopback(&form.endpoint);
+    if remote {
+        ui.add_space(2.0);
+        let r = ui.checkbox(&mut form.allow, crate::i18n::tr(REMOTE_CONSENT));
+        register(ui.ctx(), "check:describe.allowRemoteHost", r.rect);
+    }
+    if let Some(e) = &form.error {
+        let r = ui.add(egui::Label::new(RichText::new(e).font(t.font(11.5)).color(t.caution)).wrap());
+        register(ui.ctx(), "vera:describe:error", r.rect);
+    }
+    let r = ui.button(crate::i18n::tr("Save"));
+    register(ui.ctx(), "button:describeSave", r.rect);
+    save |= r.clicked();
+    hint(
+        ui,
+        t,
+        "Describe asks a vision model you run for a title, caption, alt text and keywords: any server that speaks the OpenAI-compatible chat API, such as llama.cpp, Ollama, vLLM or LM Studio. Nothing is sent until you choose Photo → Describe Photos…, and every description waits for your review.",
+    );
+    if save {
+        let text = |s: &str| if s.trim().is_empty() { Value::Null } else { json!(s.trim()) };
+        let mut p = json!({"endpoint": text(&form.endpoint), "model": text(&form.model), "allowRemoteHost": remote && form.allow});
+        if !form.token.trim().is_empty() {
+            p["token"] = json!(form.token.trim());
+        }
+        match app.session.execute("vera.describe.config", &p) {
+            Ok(_) => {
+                form.error = None;
+                form.token.clear();
+                form.replacing = false;
+            }
+            Err(e) => {
+                let e = e.to_string();
+                form.error = Some(if remote && !form.allow && e.contains("allowRemoteHost") {
+                    crate::i18n::tr_format!(
+                        "{host} is another computer: tick the box above to agree before photos are sent there.",
+                        host = endpoint_host(&form.endpoint)
+                    )
+                } else {
+                    super::faces::sentence(engine_message(&e))
+                });
+            }
+        }
+        app.caches.vera_epoch += 1;
+        // saved: the form reloads from what the engine kept; refused: it keeps what was typed, with the error
+        form.epoch = if form.error.is_none() { 0 } else { app.caches.vera_epoch };
+    }
+    ctx.data_mut(|d| d.insert_temp(form_id(), form));
 }
 
 /// The SigLIP 2 model: download (with its progress and Cancel), or the on/off switch, its size and Remove.

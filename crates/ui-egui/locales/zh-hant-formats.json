@@ -251,5 +251,19 @@
   "{name} · commercial use allowed": "{name} · 允許商業使用",
   "No photos look like {name}": "沒有與 {name} 相似的照片",
   "Ranked: “{query}” · by words and meaning": "依相關性：「{query}」 · 依字詞和含義",
-  "Looks like {name}": "與 {name} 相似"
+  "Looks like {name}": "與 {name} 相似",
+  "Describing {n} photos with {host}: each description waits for your review": "正在用 {host} 描述 {n} 張照片：每則描述都等待你的審閱",
+  "Suggesting keywords for {n} photos: they wait for your review": "正在為 {n} 張照片建議關鍵字：它們等待你的審閱",
+  "The endpoint at {host} needs an access token: Settings → Search.": "{host} 上的端點需要存取權杖：設定 → 搜尋。",
+  "{n} descriptions wait for your review": "{n} 則描述等待你的審閱",
+  "Nothing to review yet · {n} photos are being described": "暫無需要審閱的內容 · 正在描述 {n} 張照片",
+  "Proposed by {model} at {host}": "由 {model}（{host}）建議",
+  "Proposed by {model}": "由 {model} 建議",
+  "{n} to review": "待審閱 {n} 則",
+  "Reject all {n} proposals? Nothing is written to the photos.": "拒絕全部 {n} 則建議？不會向照片寫入任何內容。",
+  "This session: {accepted} accepted · {rejected} rejected · {waiting} being described · {total} to review": "本次工作階段：已接受 {accepted} · 已拒絕 {rejected} · 描述中 {waiting} · 待審閱 {total}",
+  "Written by {model}": "由 {model} 撰寫",
+  "{who}, accepted {when}": "{who}，於 {when} 接受",
+  "Error: {e}": "錯誤：{e}",
+  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} 是另一台電腦：請先勾選上方的核取方塊表示同意，之後才會向其傳送照片。"
 }

@@ -251,5 +251,19 @@
   "{name} · commercial use allowed": "{name} · комерційне використання дозволено",
   "No photos look like {name}": "Немає фото, схожих на {name}",
   "Ranked: “{query}” · by words and meaning": "За релевантністю: «{query}» · за словами і змістом",
-  "Looks like {name}": "Схожі на {name}"
+  "Looks like {name}": "Схожі на {name}",
+  "Describing {n} photos with {host}: each description waits for your review": "Описуємо {n} фото за допомогою {host}: кожен опис чекає на вашу перевірку",
+  "Suggesting keywords for {n} photos: they wait for your review": "Добираємо ключові слова для {n} фото: вони чекають на вашу перевірку",
+  "The endpoint at {host} needs an access token: Settings → Search.": "Ендпоінту {host} потрібен токен доступу: Налаштування → Пошук.",
+  "{n} descriptions wait for your review": "Описів, що чекають на перевірку: {n}",
+  "Nothing to review yet · {n} photos are being described": "Поки нічого перевіряти · описується фото: {n}",
+  "Proposed by {model} at {host}": "Запропоновано {model} на {host}",
+  "Proposed by {model}": "Запропоновано {model}",
+  "{n} to review": "На перевірку: {n}",
+  "Reject all {n} proposals? Nothing is written to the photos.": "Відхилити всі пропозиції ({n})? У фото нічого не записується.",
+  "This session: {accepted} accepted · {rejected} rejected · {waiting} being described · {total} to review": "Цей сеанс: прийнято {accepted} · відхилено {rejected} · описується {waiting} · на перевірку {total}",
+  "Written by {model}": "Написано {model}",
+  "{who}, accepted {when}": "{who}, прийнято {when}",
+  "Error: {e}": "Помилка: {e}",
+  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} — інший комп’ютер: позначте поле вище, щоб погодитися, перш ніж фото буде туди надіслано."
 }

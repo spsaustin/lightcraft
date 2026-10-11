@@ -898,6 +898,13 @@ pub fn context_menu(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
     if ui.button(crate::i18n::tr("Find Photos That Look Alike")).clicked() {
         let _ = app.run("photo.showLookAlikes", json!({"id": id.0}));
     }
+    // the selection when the photo is in it, else this photo; when Describe cannot run, the command's toast says why
+    if ui.button(crate::i18n::tr("Describe Photos…")).clicked() {
+        if !app.session.selection.ids.contains(&id) {
+            let _ = app.session.execute("library.select", &json!({"ids": [id.0]}));
+        }
+        let _ = app.run("photo.describeSelected", json!({}));
+    }
     if ui.button(crate::i18n::tr("Show Duplicates")).clicked()
         && let Err(e) = app.run("photo.showDuplicates", json!({"id": id.0}))
     {

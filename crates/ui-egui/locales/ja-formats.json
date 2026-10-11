@@ -251,5 +251,19 @@
   "{name} · commercial use allowed": "{name} · 商用利用可",
   "No photos look like {name}": "{name} に似た写真はありません",
   "Ranked: “{query}” · by words and meaning": "関連順: 「{query}」 · 単語と意味で",
-  "Looks like {name}": "{name} に似た写真"
+  "Looks like {name}": "{name} に似た写真",
+  "Describing {n} photos with {host}: each description waits for your review": "{host} で {n} 枚の写真を説明中: 各説明はあなたの確認を待ちます",
+  "Suggesting keywords for {n} photos: they wait for your review": "{n} 枚の写真のキーワードを提案中: あなたの確認を待ちます",
+  "The endpoint at {host} needs an access token: Settings → Search.": "{host} のエンドポイントにはアクセストークンが必要です: 設定 → 検索。",
+  "{n} descriptions wait for your review": "{n} 件の説明が確認を待っています",
+  "Nothing to review yet · {n} photos are being described": "まだ確認するものはありません · {n} 枚を説明中",
+  "Proposed by {model} at {host}": "{model}（{host}）による提案",
+  "Proposed by {model}": "{model} による提案",
+  "{n} to review": "確認待ち {n} 件",
+  "Reject all {n} proposals? Nothing is written to the photos.": "{n} 件の提案をすべて却下しますか？写真には何も書き込まれません。",
+  "This session: {accepted} accepted · {rejected} rejected · {waiting} being described · {total} to review": "このセッション: 受け入れ {accepted} · 却下 {rejected} · 説明中 {waiting} · 確認待ち {total}",
+  "Written by {model}": "{model} が作成",
+  "{who}, accepted {when}": "{who}、{when} に受け入れ",
+  "Error: {e}": "エラー: {e}",
+  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} は別のコンピューターです: 写真を送信する前に上のボックスにチェックを入れて同意してください。"
 }

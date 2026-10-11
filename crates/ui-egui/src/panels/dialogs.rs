@@ -100,6 +100,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
         Dialog::FaceModel { info, .. } if info["download"].is_string() => "Download Face Model",
         Dialog::FaceModel { .. } => "Add Face Model",
         Dialog::VeraModel { .. } => "Download the SigLIP 2 Model",
+        Dialog::ReviewDescriptions { .. } => "Review Descriptions",
         Dialog::WhatsNew => "What's New",
         Dialog::Cull { .. } => "Assisted Culling",
         Dialog::SmartRules { id: None, .. } => "New Smart Album",
@@ -141,6 +142,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
             Dialog::SmartRules { .. } => 680.0,
             Dialog::AllMetadata { .. } => 620.0,
             Dialog::FaceModel { .. } | Dialog::VeraModel { .. } => 460.0,
+            Dialog::ReviewDescriptions { .. } => 760.0,
             _ => 380.0,
         })
         .show(ctx, |ui| {
@@ -195,6 +197,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 Dialog::DenoiseModel { info, accepted } => crate::panels::denoise::model_dialog(app, ui, &t, info, accepted),
                 Dialog::FaceModel { info, accepted, .. } => crate::panels::faces::model_dialog(app, ui, &t, info, accepted),
                 Dialog::VeraModel { info, accepted, error } => crate::panels::vera_settings::licence_dialog(app, ui, &t, info, accepted, error.as_deref()),
+                Dialog::ReviewDescriptions { review } => crate::panels::describe_review::body(app, ui, &t, review),
                 Dialog::SystemInfo { rows } => {
                     egui::Grid::new("sysinfo").num_columns(2).spacing([16.0, 4.0]).striped(true).show(ui, |ui| {
                         for (k, v) in rows.iter() {
@@ -952,7 +955,8 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 // a model file LightCraft cannot use has nothing to confirm
                 let unusable_model = matches!(&dlg, Dialog::DenoiseModel { info, .. } | Dialog::FaceModel { info, .. } if info["kind"] == "unsupported");
-                let informational = unusable_model || matches!(dlg, Dialog::About | Dialog::Shortcuts | Dialog::Settings { .. });
+                let informational =
+                    unusable_model || matches!(dlg, Dialog::About | Dialog::Shortcuts | Dialog::Settings { .. } | Dialog::ReviewDescriptions { .. });
                 let sam = &app.session.segmenter;
                 let (sam_installed, sam_running, sam_failed) = (sam.installed(), sam.download_status().running, sam.download_status().error.is_some());
                 // no download location in this build: nothing to offer but the manual install
@@ -1380,7 +1384,7 @@ pub fn confirm_dialog(app: &mut LightcraftApp, dlg: &Dialog) -> Result<serde_jso
         Dialog::ConfirmDelete { .. } => app.run("photo.delete", json!({})),
         Dialog::RemoveFolder { path, disk, .. } => app.run("library.removeFolder", json!({"path": path, "disk": disk})),
         d @ Dialog::SynchronizeFolder { .. } => crate::sync::confirm(app, d),
-        Dialog::About | Dialog::Shortcuts | Dialog::Settings { .. } => Ok(serde_json::Value::Null),
+        Dialog::About | Dialog::Shortcuts | Dialog::Settings { .. } | Dialog::ReviewDescriptions { .. } => Ok(serde_json::Value::Null),
     }
 }
 

@@ -538,6 +538,33 @@ pub enum OnlyKind {
     LooksLike { name: String },
 }
 
+/// The review of Describe's proposals as it stands: the proposal open (its photo) and the edits made to it, which
+/// fields are ticked, what was skipped, and this session's counts.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct DescribeReview {
+    /// The photo whose proposal the fields below hold (none until the first is read).
+    pub photo: Option<u64>,
+    pub title: String,
+    pub caption: String,
+    pub alt_text: String,
+    pub keywords: Vec<String>,
+    /// The keyword being typed into the proposal's "Add keyword" field.
+    pub new_keyword: String,
+    /// The proposal's fields as `describe.accept` names them, and whether each is ticked.
+    pub fields: Vec<(String, bool)>,
+    /// Add the keywords to the photo's (off) or replace them (`replaceKeywords`).
+    pub replace_keywords: bool,
+    /// Photos passed over with Skip: shown again once every other proposal has been seen.
+    pub skipped: Vec<u64>,
+    pub accepted: usize,
+    pub rejected: usize,
+    /// Reject All asked: waiting for the confirmation.
+    pub confirm_clear: bool,
+    /// Why the last Accept or Reject did not work.
+    pub error: Option<String>,
+}
+
 /// The button a toast offers: its label and the command it runs (`app.run`), shown while the toast says `text`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ToastAction {
@@ -771,6 +798,12 @@ pub enum Dialog {
         /// Why the download could not start (shown in the dialog).
         #[serde(default)]
         error: Option<String>,
+    },
+    /// Window ▸ Review Descriptions (`panels::describe_review`): Describe's proposals (`describe.list`), one at a time,
+    /// each field beside the photo's own value and editable before Accept, Reject or Skip.
+    ReviewDescriptions {
+        #[serde(default)]
+        review: DescribeReview,
     },
     /// Confirm moving photos to Recently Deleted.
     ConfirmDelete {

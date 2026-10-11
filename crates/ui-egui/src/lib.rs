@@ -91,6 +91,8 @@ mod tests_unsaved;
 #[cfg(test)]
 mod tests_vera;
 #[cfg(test)]
+mod tests_vera_describe;
+#[cfg(test)]
 mod tests_vera_lane;
 #[cfg(test)]
 mod tests_zoom;
@@ -1254,6 +1256,8 @@ pub struct Caches {
     pub vera_epoch: u64,
     /// The last `search.text` warning shown as a toast (each is shown once).
     pub vera_warning: Option<String>,
+    /// The Describe lane as the pump last reported it: (waiting, in flight, proposals to review).
+    pub vera_describe: (u64, u64, u64),
     person_names: Option<(u64, std::sync::Arc<Vec<String>>)>,
     /// The grid's date runs, layout and indexes (by the visible list's generation).
     pub grid: panels::grid::GridCache,

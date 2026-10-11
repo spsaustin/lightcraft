@@ -29,9 +29,18 @@ pub fn pump(app: &mut LightcraftApp, ctx: &egui::Context) {
     // the vector lane, when it runs: its pictures go to the worker and come back through the same call
     app.caches.vera_embedding = (v["embedding"]["pending"].as_u64().unwrap_or(0), v["embedding"]["embedded"].as_u64().unwrap_or(0));
     let photos = v["photos"].as_u64().unwrap_or(0);
+    // Describe: photos waiting for a worker or in flight, and the proposals waiting for review
+    let d = &v["describe"];
+    let describe = (d["pending"].as_u64().unwrap_or(0), d["inFlight"].as_u64().unwrap_or(0), d["proposals"].as_u64().unwrap_or(0));
+    let was_busy = app.caches.vera_describe.0 + app.caches.vera_describe.1 > 0;
+    app.caches.vera_describe = describe;
+    if was_busy && describe.0 + describe.1 == 0 {
+        super::describe_review::run_ended(app, ctx);
+    }
     // as for the face scan: called again in 50 ms while there is work, looked at again every few seconds once it is
     // done (new photos are fingerprinted soon after they arrive), and nothing asked for while the library is empty
-    let (next, wait) = schedule(app.caches.vera_pending.saturating_add(app.caches.vera_embedding.0), photos);
+    let work = app.caches.vera_pending.saturating_add(app.caches.vera_embedding.0).saturating_add(describe.0).saturating_add(describe.1);
+    let (next, wait) = schedule(work, photos);
     app.caches.vera_next_pump = now + next;
     if let Some(secs) = wait {
         ctx.request_repaint_after(std::time::Duration::from_secs_f64(secs));
@@ -139,7 +148,7 @@ fn none_found(name: &str, pending: u64, off: bool) -> String {
 }
 
 /// The vector lane's state (`vera.status`) and whether the session has a folder to keep its model in.
-fn vector_state(app: &mut LightcraftApp) -> (String, String, bool) {
+pub(crate) fn vector_state(app: &mut LightcraftApp) -> (String, String, bool) {
     let st = app.session.execute("vera.status", &json!({})).unwrap_or(Value::Null);
     let v = &st["lanes"]["vector"];
     let state = v["state"].as_str().unwrap_or("").to_string();
@@ -155,14 +164,14 @@ fn meaning_off(app: &mut LightcraftApp) -> bool {
 }
 
 /// The toast just shown gets a button that opens Settings ▸ Search.
-fn offer_settings(app: &mut LightcraftApp) {
+pub(crate) fn offer_settings(app: &mut LightcraftApp) {
+    offer(app, crate::i18n::tr("Open Settings → Search"), "app.settings", json!({"tab": "search"}));
+}
+
+/// The toast just shown gets a button `label` that runs `command`.
+pub(crate) fn offer(app: &mut LightcraftApp, label: &str, command: &str, params: Value) {
     let Some((text, ..)) = &app.ui.toast else { return };
-    app.ui.toast_action = Some(crate::state::ToastAction {
-        text: text.clone(),
-        label: crate::i18n::tr("Open Settings → Search").to_string(),
-        command: "app.settings".into(),
-        params: json!({"tab": "search"}),
-    });
+    app.ui.toast_action = Some(crate::state::ToastAction { text: text.clone(), label: label.to_string(), command: command.into(), params });
 }
 
 /// Photo ▸ Find Photos That Look Alike (`photo.showLookAlikes`): the grid shows photo `id` (the active one by
@@ -276,6 +285,7 @@ pub fn inspect(app: &LightcraftApp) -> Value {
         "digested": app.caches.vera_digested,
         "pace": app.caches.vera_pace,
         "embedding": {"pending": pending, "embedded": embedded},
+        "describe": {"pending": app.caches.vera_describe.0, "inFlight": app.caches.vera_describe.1, "proposals": app.caches.vera_describe.2},
     })
 }
 
