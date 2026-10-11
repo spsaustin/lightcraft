@@ -1,0 +1,38 @@
+VER standard files vendored into lightcraft-ver
+================================================
+
+Everything under this directory is copied byte-for-byte from the VER standard repository
+("vera"), licensed under the Apache License, Version 2.0 (LICENSE-APACHE-2.0 beside this file).
+No file here was modified.
+
+Source snapshot: the vera repository's main branch as checked out on 2026-08-31 (file timestamps
+of the snapshot; the snapshot carried no git metadata, so no commit hash is available). The
+release directories identify themselves:
+
+  decoder-corpus/1/      standards/decoder-corpus/1/      corpus ver-decoder-corpus/1,
+                                                          profile verd-pillow/1, dated 2026-08-25;
+                                                          manifest.json sha256
+                                                          d743f077778d60b724f060355a26ea138c9f92ee1d82c275a76707a073e09b5e
+                                                          (as its README records)
+  reference-sets/        standards/reference-sets/        README.md, images/ (10 PNGs) and the
+                                                          clip-vit-b32, siglip-base-p16-256 and
+                                                          siglip2-base-p16-256 manifests
+  schemas/ver-record-1.0.1.schema.json
+                         standards/ver/1.0.1/ver-record.schema.json
+                         sha256 44166d59f31e8bb898e0a3bf4c5863c154e273a97d1bc6bfee61d141e949d34a
+  schemas/ver-record-1.1-draft.schema.json
+                         standards/ver/1.1-draft/ver-record.schema.json
+                         sha256 a424b4967cf39943c53a83df3869b674e42efb61aac7d23495b778c8189dd31e
+  conformance/           conformance/                     corpus ver-conformance/1.1-draft,
+                                                          profile vera-profile/1.0, generated
+                                                          2026-08-25: README.md, manifest.json,
+                                                          valid/, invalid/, keys/, lineage-peers/,
+                                                          registries/
+
+Omitted, for size: conformance/invalid/ver104-record-size-policy.json (2.1 MB) and
+conformance/invalid/ver105-record-size-exceeded.json (1.6 MB). Both exercise record-size policy
+(VER104, VER105), which lightcraft-ver does not implement; the tests skip manifest entries whose
+file is not present.
+
+The images in decoder-corpus/1/corpus/ and reference-sets/images/ were generated procedurally by
+the upstream generators (closed-form arithmetic over the pixel grid); none is a photograph.

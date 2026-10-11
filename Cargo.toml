@@ -37,10 +37,13 @@ lightcraft-heif = { path = "crates/heif" }
 lightcraft-segment = { path = "crates/segment" }
 lightcraft-vera = { path = "crates/vera" }
 lightcraft-embed = { path = "crates/embed" }
+lightcraft-ver = { path = "crates/ver" }
 
 # foundation
 thiserror = "2"
 sha2 = "0.10"
+sha1 = "0.10"
+half = "2"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 log = "0.4"
@@ -55,6 +58,8 @@ dhat = "0.3" # opt-in heap profiling (lightcraft-cli --features dhat-heap); neve
 # formats
 quick-xml = "0.38"
 miniz_oxide = "0.8"
+# JSON Schema 2020-12 validation (lightcraft-ver); no network resolvers, schemas are vendored
+jsonschema = { version = "0.58", default-features = false }
 
 # codecs
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tiff", "webp"] }

@@ -1,0 +1,66 @@
+{
+  "reference_set_version": "1",
+  "space_id": "org.verstandard.space.siglip2-base-p16-256/1.0",
+  "items": [
+    {
+      "name": "01-gradient-scene.png",
+      "content_sha256": "163dc8e90fb381e226bdcf93852e7e78ba815bc1819e4a1a7d5d40249953994e",
+      "pixel_sha256": "bd175fc10985c7a87c7643ad969322e26f43c51710720187b2689d3106da40fb",
+      "vector_sha256": "f14141d155fa55829dda32c69938d39f700a6a6bd54bb2b3bf73d639478de841"
+    },
+    {
+      "name": "02-text-document.png",
+      "content_sha256": "292c855597061be4368e49d591d442a1fe7c419e94fae8691736909eeec9c531",
+      "pixel_sha256": "8b07f7bf54c1510169c11a59b5449561a535eba189e3c9c39d67d022c9ba6b64",
+      "vector_sha256": "b9f779f09f3979f0ada73019ab844db5c977bfa7cd0a7e3b987858237f2bc25a"
+    },
+    {
+      "name": "03-high-frequency-texture.png",
+      "content_sha256": "b540e3b9f0994fd5f88369711ef0ccc29e1c89cf258f5137a8c617c228e820a6",
+      "pixel_sha256": "e24978e94d5061dc1834a898f2c3a9f1c5326274708a2067ee2caf446f656110",
+      "vector_sha256": "53bdb1316a16b3939ee5956160262ff9313180196d72506548e59ed61aaed6d9"
+    },
+    {
+      "name": "04-low-contrast-field.png",
+      "content_sha256": "fe7b84e9231cda3f341ecf4062fc4922fbabf93d7920971c77d600397ea59058",
+      "pixel_sha256": "efc9f638516d25d420c39004e84ef7f8014afd74a7447650fab8deb4a610b613",
+      "vector_sha256": "c5fbadb1e57655c7cc7e79385ba8976450d7c14a339b70a6aba6490d61927a8c"
+    },
+    {
+      "name": "05-saturated-primaries.png",
+      "content_sha256": "efd2b4642ba209f97e17d47d82906d92e5fc4120e64432fa5824221e4987ac82",
+      "pixel_sha256": "0249ce129159c1336ec689e8ef09898933b115390a39da54aa34685038c62580",
+      "vector_sha256": "be1c035eef2a7ed496f8cdff7060988bf49798419a6a89b6b860f516d33215a4"
+    },
+    {
+      "name": "06-near-black.png",
+      "content_sha256": "30aa87a034c1a604bbc71e0c3c0b52607cf68f8811a5891a4de837c1a40190bc",
+      "pixel_sha256": "49f4ac1f8206f2bfdc03874973ce95657c8b1bec6e1b07c766337fcace971c92",
+      "vector_sha256": "606b3bc793a8a51110a33ff8b8b8de19c42a2f00a2fb26396990abe005aca7b8"
+    },
+    {
+      "name": "07-near-white.png",
+      "content_sha256": "48672103a4bf354d1125ee0021e419f3ec1fe50f1543ad7159067380444cfe33",
+      "pixel_sha256": "a4823123bd4ef44c2a2313dba81662502e3fe3a3b96d59c6d5c654f43ec0acff",
+      "vector_sha256": "d64829629ae77227586cb0d9f34b25cd53b438ef8e53ccf9629992bd862c53d5"
+    },
+    {
+      "name": "08-diagonal-composition.png",
+      "content_sha256": "7ed35c5b46814952f31c74f7d6ad94e34519d100c2989d01fbc3c68119cc6f4a",
+      "pixel_sha256": "25196b25e83ff5917daa23938c40f36252b18a9a3cd37545e30a04bef3c0a481",
+      "vector_sha256": "7cc3d4e85729010a447b935951d080142e42858adfcd6472a2fbc665578a39dd"
+    },
+    {
+      "name": "09-radial-pattern.png",
+      "content_sha256": "6d5474c389f4c62ac4a881adec28104d3c1b4fa862ddde5168768cb22f7f53da",
+      "pixel_sha256": "52ab0e9d52a9a60df96cf13ecc7a6f74435f2a6f5e186d7f2f1004783d2fd210",
+      "vector_sha256": "b56e4305888fe64dcff208ab3301f333deef208a06dd233d8eae17f18187ce3b"
+    },
+    {
+      "name": "10-photographic-composite.png",
+      "content_sha256": "6b8dbbfea950fc69a0738d2d83df6780bef996ebdd2cd2ef669cbf52dbd7215f",
+      "pixel_sha256": "e05a1b6c98e836961db33f177034ceaf4138f8f155c0a6d11ab5d268fcd9abdb",
+      "vector_sha256": "c199b6f2d31adb89fb5e085c8df87ec374dca560c25c3d8371adda3b699feb57"
+    }
+  ]
+}

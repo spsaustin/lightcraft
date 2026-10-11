@@ -1,0 +1,156 @@
+{
+  "ver_version": "1.0",
+  "cpnp_version": "1.0",
+  "record_id": "bbc037a5-522e-5614-aa39-f6ab08ec3e03",
+  "created_at": "2026-08-22T09:14:20Z",
+  "generator": {
+    "name": "ver-conformance-corpus",
+    "version": "1.0.1"
+  },
+  "conformance_level": "L2",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "45656e3ec534f0e6993853cbe1c9645ce535741ddbb1a1fc69c8673c303a685b"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "c87ca9f2ee178aa90e590fa07f095e39dbc2165f4a6fbeeb0cd8028044fbc5b9",
+      "width": 4032,
+      "height": 3024
+    },
+    "perceptual": [
+      {
+        "alg": "pdq/1.0",
+        "value": "0d9fcc58abcbea94dc55669723d8d8f13bb6c0c121b9aea65901f02293f69773"
+      },
+      {
+        "alg": "phash-dct/64",
+        "value": "1f4a0b21cc1277c7"
+      }
+    ]
+  },
+  "image": {
+    "format": "jpeg",
+    "width": 4032,
+    "height": 3024,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false,
+    "source_bytes_ref": {
+      "uri": "https://assets.example.org/blobs/boardwalk-sunset.jpg",
+      "sha256": "45656e3ec534f0e6993853cbe1c9645ce535741ddbb1a1fc69c8673c303a685b",
+      "byte_length": 2841377
+    }
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.openclip-vit-l14-datacomp-xl/1.0",
+      "kind": "visual",
+      "model": {
+        "family": "openclip",
+        "architecture": "ViT-L/14",
+        "checkpoint": "datacomp_xl_s13b_b90k",
+        "weights_sha256": "808c5c3d755c7eee2f168b8432b5601067cd9467d759bd2ebe1f72265920a6a1"
+      },
+      "dim": 768,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_224",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_224",
+        "mean": [
+          0.48145466,
+          0.4578275,
+          0.40821073
+        ],
+        "std": [
+          0.26862954,
+          0.26130258,
+          0.27577711
+        ],
+        "channel_order": "rgb"
+      },
+      "reference": {
+        "set_uri": "https://verstandard.org/refsets/openclip-vit-l14-datacomp-xl-1.0",
+        "tolerance_cosine": 0.999
+      },
+      "provenance": {
+        "publisher": "verstandard.org",
+        "published_at": "2026-06-01T00:00:00Z",
+        "license": "MIT"
+      }
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.openclip-vit-l14-datacomp-xl/1.0",
+      "dim": 768,
+      "dtype": "fp32",
+      "vector_ref": {
+        "uri": "https://vectors.example.org/boardwalk-sunset/canonical-visual-openclip-vit-l14-datacomp-xl.bin",
+        "sha256": "8d1fe99b503b9439f6d0b513a6da3418a6ae02302be69460ccd77cd2aa726ef8",
+        "byte_length": 3072
+      },
+      "produced_at": "2026-08-22T09:14:10Z",
+      "producer": "ver-producer/1.0.3 (onnxruntime-gpu 1.22, fp32)"
+    }
+  ],
+  "metadata": {
+    "raw": [
+      {
+        "segment": "xmp",
+        "bytes": "aHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wLwA8P3hwYWNrZXQgYmVnaW49Iu+7vyIgaWQ9Ilc1TTBNcENlaGlIenJlU3pOVGN6a2M5ZCI/Pjx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iPjxyZGY6UkRGIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyI+PHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6ZGM9Imh0dHA6Ly9wdXJsLm9yZy9kYy9lbGVtZW50cy8xLjEvIj48ZGM6Y3JlYXRvcj48cmRmOlNlcT48cmRmOmxpPkEuIFJpdmVyYTwvcmRmOmxpPjwvcmRmOlNlcT48L2RjOmNyZWF0b3I+PC9yZGY6RGVzY3JpcHRpb24+PC9yZGY6UkRGPjwveDp4bXBtZXRhPjw/eHBhY2tldCBlbmQ9InciPz4=",
+        "sha256": "b0f750ef05bb89c00c553ff1b69d4e6ae65bc05af9b8635eda1114e1c51060ed"
+      },
+      {
+        "segment": "icc",
+        "bytes": "AAAMSGxjbXMEMAAAbW50clJHQiBYWVogB+YACAAF",
+        "sha256": "bd3f0d3a80cc54728e5b80537f15e9615dfe8a8a4f7d3d8ad6569f07c69a7fbb"
+      }
+    ],
+    "availability": {
+      "exif": "absent",
+      "xmp": "present",
+      "iptc": "absent",
+      "icc": "present",
+      "c2pa": "absent"
+    },
+    "normalized": {
+      "@context": {
+        "dc": "http://purl.org/dc/elements/1.1/",
+        "Iptc4xmpExt": "http://iptc.org/std/Iptc4xmpExt/2008-02-29/"
+      },
+      "dc:description": "Sunset over a boardwalk, silhouetted pier in background.",
+      "dc:creator": "A. Rivera"
+    },
+    "conflicts": [
+      {
+        "field": "dc:creator",
+        "values": [
+          {
+            "source": "xmp",
+            "value": "A. Rivera",
+            "trust": "unsigned"
+          },
+          {
+            "source": "platform",
+            "value": "arivera_photo",
+            "trust": "unsigned"
+          }
+        ]
+      }
+    ],
+    "trust": [
+      {
+        "field": "dc:creator",
+        "tier": "unsigned"
+      }
+    ],
+    "redactions": []
+  }
+}

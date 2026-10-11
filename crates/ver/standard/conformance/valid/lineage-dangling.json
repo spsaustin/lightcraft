@@ -1,0 +1,97 @@
+{
+  "ver_version": "1.1",
+  "cpnp_version": "1.0",
+  "record_id": "ae11345d-b38a-5fd3-be0b-1445062d59a9",
+  "created_at": "2026-08-25T10:00:00Z",
+  "generator": {
+    "name": "ver-conformance-corpus",
+    "version": "1.1-draft"
+  },
+  "conformance_level": "L0",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "fcf66d87e820436af1d5d8e5c08341bdc1295c9094cf4edc3ceedd135294c9ca"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "20e5bb5d40e18020831adbc6d75faf388659c27718a062e4eac0c711e8c15c9d",
+      "width": 8,
+      "height": 6
+    }
+  },
+  "image": {
+    "format": "png",
+    "width": 8,
+    "height": 6,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false
+  },
+  "lineage": {
+    "parents": [
+      {
+        "record_uri": "https://dam.example.invalid/ver/records/0f6a1c25-9a2b-5b6d-9c1e-7a4d3f2b8e60",
+        "producer_id": "did:web:dam.example.invalid",
+        "record_id": "0f6a1c25-9a2b-5b6d-9c1e-7a4d3f2b8e60",
+        "content_hash": "572e630930496ccbbf4b0a4b1ca19db473abf4316805d3683eb26ce6503d73d5",
+        "relation": "derived",
+        "note": "the producing DAM was decommissioned; the URI no longer resolves"
+      }
+    ]
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "kind": "visual",
+      "model": {
+        "family": "corpus-vision",
+        "architecture": "ViT-Tiny/4",
+        "checkpoint": "corpus-visual-v1",
+        "weights_sha256": "0dfcf4dea153bcdd0b54278d172169c714913c5e71a5896f923359a247f02afb"
+      },
+      "dim": 4,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_4",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_4",
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "channel_order": "rgb"
+      },
+      "reference": {
+        "set_uri": "https://refsets.example.org/corpus-visual-1.1",
+        "set_manifest_sha256": "58d6aed1be8e7c8eb56139e007ea3ded1c6f5a675ba50ea86ec75ed5f5835bbe",
+        "tolerance_cosine": 0.999
+      }
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "dim": 4,
+      "dtype": "fp32",
+      "vector": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "produced_at": "2026-08-25T09:00:03Z",
+      "producer": "ver-conformance-corpus/1.1-draft"
+    }
+  ]
+}

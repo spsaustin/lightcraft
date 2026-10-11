@@ -1,0 +1,86 @@
+{
+  "ver_version": "1.1",
+  "cpnp_version": "1.0",
+  "record_id": "588dfd1e-2cdf-53f5-9933-1941be47fda4",
+  "created_at": "2026-08-25T10:00:00Z",
+  "generator": {
+    "name": "ver-conformance-corpus",
+    "version": "1.1-draft"
+  },
+  "conformance_level": "L0",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "8ddcd975a0e68b0670977086d06e38cda33e1a4943701da6638e4d1ed14febca"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "79061e32453c0e1aa1772d9d20f05df05ef3894185654f3b8aaa553c48d11bdd",
+      "width": 8,
+      "height": 6
+    }
+  },
+  "image": {
+    "format": "png",
+    "width": 8,
+    "height": 6,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "kind": "visual",
+      "model": {
+        "family": "corpus-vision",
+        "architecture": "ViT-Tiny/4",
+        "checkpoint": "corpus-visual-v1",
+        "weights_sha256": "0dfcf4dea153bcdd0b54278d172169c714913c5e71a5896f923359a247f02afb"
+      },
+      "dim": 4,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_4",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_4",
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "channel_order": "rgb"
+      },
+      "reference": {
+        "set_uri": "https://refsets.example.org/corpus-visual-1.1",
+        "set_manifest_sha256": "58d6aed1be8e7c8eb56139e007ea3ded1c6f5a675ba50ea86ec75ed5f5835bbe",
+        "tolerance_cosine": 0.999
+      }
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "dim": 4,
+      "dtype": "fp32",
+      "vector": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "produced_at": "2026-08-25T09:00:03Z",
+      "producer": "ver-conformance-corpus/1.1-draft",
+      "vector_b64": "AACAPwAAAAAAAAAAAAAAAA=="
+    }
+  ]
+}

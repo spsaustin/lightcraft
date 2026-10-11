@@ -1,0 +1,122 @@
+{
+  "ver_version": "1.1",
+  "cpnp_version": "1.0",
+  "record_id": "7de29c4b-90f5-5e21-8f04-c5b2a41c7ab0",
+  "created_at": "2026-08-25T10:00:00Z",
+  "generator": {
+    "name": "ver-conformance-corpus",
+    "version": "1.1-draft"
+  },
+  "conformance_level": "L0",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "5802b8d7a09d79ca1f0a6f7e340fb8b6bf297cbd4147a58de4320f6a6b15d2f2"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "03733be00d4e69a60ff3d7e0252021037bc9c4289b9bfbc2ec92f3fbf417eb80",
+      "width": 8,
+      "height": 6
+    }
+  },
+  "image": {
+    "format": "png",
+    "width": 8,
+    "height": 6,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "kind": "visual",
+      "model": {
+        "family": "corpus-vision",
+        "architecture": "ViT-Tiny/4",
+        "checkpoint": "corpus-visual-v1",
+        "weights_sha256": "0dfcf4dea153bcdd0b54278d172169c714913c5e71a5896f923359a247f02afb"
+      },
+      "dim": 4,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_4",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_4",
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "channel_order": "rgb"
+      },
+      "reference": {
+        "set_uri": "https://refsets.example.org/corpus-visual-1.1",
+        "set_manifest_sha256": "58d6aed1be8e7c8eb56139e007ea3ded1c6f5a675ba50ea86ec75ed5f5835bbe",
+        "tolerance_cosine": 0.999
+      }
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "dim": 4,
+      "dtype": "fp32",
+      "vector": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "produced_at": "2026-08-25T09:00:03Z",
+      "producer": "ver-conformance-corpus/1.1-draft"
+    }
+  ],
+  "provenance": {
+    "chain": [
+      {
+        "at": "2026-08-25T09:00:00Z",
+        "actor": "ver-conformance-corpus",
+        "action": "import",
+        "tool": "ver-fetch/1.1-draft"
+      }
+    ]
+  },
+  "metadata": {
+    "availability": {
+      "iptc": "upstream_withheld"
+    },
+    "normalized": {
+      "Iptc4xmpExt:PersonInImage": {
+        "redacted": true,
+        "reason": "never-received-upstream"
+      }
+    },
+    "redactions": [
+      {
+        "field": "Iptc4xmpExt:PersonInImage",
+        "reason": "never-received-upstream",
+        "state": "upstream_withheld",
+        "normalized_pointer": "/Iptc4xmpExt:PersonInImage"
+      }
+    ],
+    "raw": [
+      {
+        "segment": "iptc-iim",
+        "index": 0,
+        "bytes": "UGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAABAcAlAAQS4gUGVyc29uAA==",
+        "sha256": "ced21dda330a7d1abb8d97e0f4931a4f22de3a66df0ab7b3c14b3cd95913c8d7"
+      }
+    ]
+  }
+}

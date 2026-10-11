@@ -1,0 +1,95 @@
+{
+  "ver_version": "1.0",
+  "cpnp_version": "1.0",
+  "record_id": "adf489e6-7ec4-5c4f-b125-f54c22469456",
+  "created_at": "2026-08-22T09:14:20Z",
+  "generator": {
+    "name": "ver-conformance-corpus",
+    "version": "1.0.1"
+  },
+  "conformance_level": "L0",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "45656e3ec534f0e6993853cbe1c9645ce535741ddbb1a1fc69c8673c303a685b"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "c87ca9f2ee178aa90e590fa07f095e39dbc2165f4a6fbeeb0cd8028044fbc5b9",
+      "width": 4032,
+      "height": 3024
+    },
+    "perceptual": [
+      {
+        "alg": "pdq/1.0",
+        "value": "0d9fcc58abcbea94dc55669723d8d8f13bb6c0c121b9aea65901f02293f69773"
+      },
+      {
+        "alg": "phash-dct/64",
+        "value": "1f4a0b21cc1277c7"
+      }
+    ]
+  },
+  "image": {
+    "format": "jpeg",
+    "width": 4032,
+    "height": 3024,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false,
+    "source_bytes_ref": {
+      "uri": "https://assets.example.org/blobs/boardwalk-sunset.jpg",
+      "sha256": "45656e3ec534f0e6993853cbe1c9645ce535741ddbb1a1fc69c8673c303a685b",
+      "byte_length": 2841377
+    }
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.fixture-visual-binary-256/1.0",
+      "kind": "visual",
+      "model": {
+        "family": "fixture",
+        "architecture": "toy-cnn-256b",
+        "checkpoint": "conformance-corpus-256-binary",
+        "weights_sha256": "fe543202da460915a10e99c4991341318bb50c8408e2d2a3651dbf02a13857b6"
+      },
+      "dim": 256,
+      "dtype": "binary",
+      "normalization": "none",
+      "metric": "l2",
+      "preprocessing": {
+        "resize": "shortest_side_64",
+        "interpolation": "bilinear",
+        "antialias": true,
+        "crop": "center_64",
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "channel_order": "rgb",
+        "binarization": "sign_of_projection"
+      },
+      "reference": {
+        "set_uri": "https://verstandard.org/refsets/fixture-visual-binary-256-1.0",
+        "tolerance_cosine": 0.999
+      }
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.fixture-visual-binary-256/1.0",
+      "dim": 256,
+      "dtype": "binary",
+      "produced_at": "2026-08-22T09:14:10Z",
+      "producer": "ver-producer/1.0.3 (onnxruntime-gpu 1.22, fp32)",
+      "vector_b64": "N24DwI/FZK7AzeNNwEt4+ICIKdBvqzH9y0qaCazCyMQ="
+    }
+  ]
+}

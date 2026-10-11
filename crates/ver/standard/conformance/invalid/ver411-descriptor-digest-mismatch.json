@@ -1,0 +1,87 @@
+{
+  "ver_version": "1.1",
+  "cpnp_version": "1.0",
+  "record_id": "1780f291-e835-5ebe-a3e0-abec1cfaf732",
+  "created_at": "2026-08-25T10:00:00Z",
+  "generator": {
+    "name": "ver-conformance-corpus",
+    "version": "1.1-draft"
+  },
+  "conformance_level": "L0",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "f11d9e354600b3cac34c9ec57f12f97a49e039d97f0e6a5c8c15f06d7d12e421"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "2b344d8ab57c66865a2c4218121013ec39aeb21a8394834f56df6da48188d404",
+      "width": 8,
+      "height": 6
+    }
+  },
+  "image": {
+    "format": "png",
+    "width": 8,
+    "height": 6,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "kind": "visual",
+      "model": {
+        "family": "corpus-vision",
+        "architecture": "ViT-Tiny/4",
+        "checkpoint": "corpus-visual-v1",
+        "weights_sha256": "0dfcf4dea153bcdd0b54278d172169c714913c5e71a5896f923359a247f02afb"
+      },
+      "dim": 4,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_4",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_4",
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "channel_order": "rgb"
+      },
+      "reference": {
+        "set_uri": "https://refsets.example.org/corpus-visual-1.1",
+        "set_manifest_sha256": "58d6aed1be8e7c8eb56139e007ea3ded1c6f5a675ba50ea86ec75ed5f5835bbe",
+        "tolerance_cosine": 0.995
+      },
+      "descriptor_uri": "https://spaces.example.org/corpus-visual-1.1.json",
+      "descriptor_sha256": "c2c923d8ea3c2417a8366088920809921ee3cd809ca2cb075ced44b7ce6dacb4"
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "dim": 4,
+      "dtype": "fp32",
+      "vector": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "produced_at": "2026-08-25T09:00:03Z",
+      "producer": "ver-conformance-corpus/1.1-draft"
+    }
+  ]
+}

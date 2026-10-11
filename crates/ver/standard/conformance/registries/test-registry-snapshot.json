@@ -1,0 +1,21 @@
+{
+  "registry": "ver-conformance-corpus/1.1-draft illustrative VER Registry snapshot",
+  "description": "A corpus-local stand-in for a VER Registry snapshot, used only by --registry for the VER1205 and VER1206 fixtures. It is NOT the governed snapshot under standards/registry/ and carries no authority whatsoever: nothing may cite it as evidence that any token is registered. It exists so the corpus's expected codes never depend on a governed artifact that changes on its own schedule.",
+  "registry_version": "1",
+  "snapshot": 1,
+  "date": "2026-08-25",
+  "namespaces": {
+    "provenance_action": {
+      "status": "open",
+      "value_space": "provenance.chain[].action",
+      "entries": [
+        {
+          "token": "watermark",
+          "status": "active",
+          "registered_in": "1.1-draft",
+          "definition": "A visible or invisible watermark was applied to the Asset. Illustrative: this token is active in THIS corpus-local snapshot and nowhere else."
+        }
+      ]
+    }
+  }
+}

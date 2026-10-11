@@ -1,0 +1,98 @@
+{
+  "ver_version": "1.1",
+  "cpnp_version": "1.0",
+  "record_id": "0f12c25b-645c-5cc8-8da8-024cab583b81",
+  "created_at": "2026-08-25T10:00:00Z",
+  "generator": {
+    "name": "ver-conformance-corpus",
+    "version": "1.1-draft"
+  },
+  "conformance_level": "L0",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "14ebac0d4cb37b37cd22b4bf5596b78be3e1afd1612ce07865bbfd688641e9f4"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "afd2cd26d59b45a053710d6c4fe55f379c0a690f0c98e64614984dcdf9cfded9",
+      "width": 8,
+      "height": 6
+    }
+  },
+  "image": {
+    "format": "png",
+    "width": 8,
+    "height": 6,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.corpus-joint/1.1",
+      "kind": "joint_visual_text",
+      "model": {
+        "family": "corpus-joint",
+        "architecture": "ViT-Tiny/4",
+        "checkpoint": "corpus-joint-v1",
+        "weights_sha256": "d86ae1b99d39f55c98bec0fe6581ca724c46c3d6ff0d59f9b440093972b25c45",
+        "artifacts": [
+          {
+            "role": "tokenizer",
+            "uri": "https://models.example.org/corpus/tokenizer.json",
+            "sha256": "72eec83a480e278950d9b98fd9b9f5b643563ea25ce5cb0aaa18dccb6bd850b3",
+            "byte_length": 56
+          }
+        ]
+      },
+      "dim": 4,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_4",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_4",
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "channel_order": "rgb",
+        "tokenizer": "corpus-sentencepiece",
+        "tokenizer_sha256": "83d3f19e7f4e556cbee6d90aebdbfa7ccadc52ed4141a0aa5e750f860758a6e2",
+        "max_length": 32,
+        "truncation": "tail",
+        "casing": "lower"
+      },
+      "reference": {
+        "set_uri": "https://refsets.example.org/corpus-joint-1.1",
+        "set_manifest_sha256": "083f5b0f49a2f5bbded4e6798d7acb607a939501f13e9a44ef3d2ceb99bd4a2a",
+        "tolerance_cosine": 0.999
+      }
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.corpus-joint/1.1",
+      "dim": 4,
+      "dtype": "fp32",
+      "vector": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "produced_at": "2026-08-25T09:00:03Z",
+      "producer": "ver-conformance-corpus/1.1-draft"
+    }
+  ]
+}

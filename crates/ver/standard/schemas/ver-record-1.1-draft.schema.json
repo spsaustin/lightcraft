@@ -1,0 +1,970 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://verstandard.org/schemas/ver-record-1.1-draft.json",
+  "title": "VER Record 1.1 (DRAFT — unratified)",
+  "description": "DRAFT. Visual Embedding Record 1.1 — the additive-capability successor to the VER 1.0 wire format as corrected by artifact release 1.0.1. Moving a record from 1.0.1 to 1.1 is a REAL MIGRATION, not a version bump: ver_version becomes \"1.1\"; embeddings[].dim and embeddings[].dtype become REQUIRED (ADR-0008); rules that 1.0.1 stated only in prose are encoded here (binary-space metric and normalization, the multi-segment raw index, the float-space tolerance floor); integrity-relevant URIs now require their digests; the redaction ledger's salted_sha256 is renamed and reshaped as commitment_sha256 + commitment_alg (ADR-0006); model.bundle carries its own manifest_sha256 rather than redefining weights_sha256 (ADR-0007); and seven objects left open by oversight in 1.0.x are closed here. VER-1.1-draft.md section 12.1 enumerates every edit a 1.0.1-valid record needs, with the exact failure pointers. CPNP-1 is unchanged and cpnp_version remains \"1.0\". NOT RATIFIED: do not publish records against this $id outside an agreed ratification trial.",
+  "type": "object",
+  "required": ["ver_version", "cpnp_version", "record_id", "created_at", "identity", "image", "spaces", "embeddings"],
+  "additionalProperties": false,
+  "properties": {
+    "ver_version": { "const": "1.1" },
+    "cpnp_version": { "const": "1.0" },
+    "record_id": { "type": "string", "format": "uuid" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "generator": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": { "name": { "type": "string" }, "version": { "type": "string" } },
+      "additionalProperties": false
+    },
+    "conformance_level": { "enum": ["L0", "L1", "L2", "L3"] },
+
+    "identity": {
+      "type": "object",
+      "required": ["content_hash", "pixel_hash"],
+      "additionalProperties": false,
+      "properties": {
+        "content_hash": { "$ref": "#/$defs/sha256Hash" },
+        "pixel_hash": { "$ref": "#/$defs/pixelHash" },
+        "perceptual": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["alg", "value"],
+            "additionalProperties": false,
+            "properties": {
+              "alg": { "enum": ["pdq/1.0", "phash-dct/64"] },
+              "value": { "type": "string", "pattern": "^[a-f0-9]+$" }
+            },
+            "allOf": [
+              {
+                "if": { "required": ["alg"], "properties": { "alg": { "const": "pdq/1.0" } } },
+                "then": { "properties": { "value": { "type": "string", "pattern": "^[a-f0-9]{64}$" } } }
+              },
+              {
+                "if": { "required": ["alg"], "properties": { "alg": { "const": "phash-dct/64" } } },
+                "then": { "properties": { "value": { "type": "string", "pattern": "^[a-f0-9]{16}$" } } }
+              }
+            ]
+          }
+        }
+      }
+    },
+
+    "image": {
+      "type": "object",
+      "required": ["format", "width", "height", "animated", "alpha_present", "hdr_present"],
+      "additionalProperties": false,
+      "properties": {
+        "format": { "enum": ["jpeg", "png", "webp", "avif", "heic", "tiff", "bmp", "gif"] },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "animated": { "type": "boolean" },
+        "alpha_present": { "type": "boolean" },
+        "hdr_present": { "type": "boolean" },
+        "source_bytes_ref": { "$ref": "#/$defs/byteRef" }
+      }
+    },
+
+    "spaces": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/spaceDescriptor" }
+    },
+
+    "embeddings": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/embedding" },
+      "contains": {
+        "type": "object",
+        "properties": { "role": { "const": "canonical_visual" } },
+        "required": ["role"]
+      }
+    },
+
+    "lineage": {
+      "type": "object",
+      "description": "DRAFT (ADR-0005, revised). How this Asset was produced from other Assets. Minimal in-record parentage; rich recipes live outside the Record in a recipe envelope (VER-1.1-draft.md section 3.4) bound by recipe_sha256.",
+      "required": ["parents"],
+      "additionalProperties": false,
+      "properties": {
+        "parents": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/lineageParent" }
+        },
+        "recipe_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 of the RFC 8785 JCS serialization of the recipe envelope (VER-1.1-draft.md section 3.4)."
+        },
+        "recipe_uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "DRAFT (ADR-0005, revised). Where the recipe envelope is retrievable. Present ⇒ recipe_sha256 REQUIRED: an integrity-relevant URI without its digest is an unverifiable fetch."
+        }
+      },
+      "allOf": [
+        {
+          "$comment": "DRAFT (ADR-0005 ruling, VER-1.1-draft.md section 3.3 / S4). recipe_uri present ⇒ recipe_sha256 REQUIRED.",
+          "if": { "required": ["recipe_uri"] },
+          "then": { "required": ["recipe_sha256"] }
+        }
+      ]
+    },
+
+    "extensions": {
+      "type": "object",
+      "description": "DRAFT (SCH-05). Vendor and deployment extensions. Keys are reverse-DNS namespaces controlled by the extension's author. Consumers MUST ignore unknown namespaces, MUST preserve them when re-serializing, and MUST NOT let them affect conformance in either direction.",
+      "propertyNames": { "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$" },
+      "additionalProperties": true
+    },
+
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "raw": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["segment", "sha256"],
+            "additionalProperties": false,
+            "properties": {
+              "segment": { "enum": ["exif", "xmp", "iptc-iim", "icc", "c2pa", "other"] },
+              "bytes": { "type": "string", "contentEncoding": "base64" },
+              "bytes_ref": {
+                "$ref": "#/$defs/byteRef",
+                "description": "DRAFT (SCH-16). By-reference carriage for segments too large to inline. This entry's own sha256 MUST equal bytes_ref.sha256; both are the digest of the decoded segment octets (annex E11), never of the base64 text."
+              },
+              "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+              "index": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "DRAFT (SCH-16). Zero-based ordinal of this segment within its family, in file order. REQUIRED when a family occupies more than one segment — encoded, per family, by the conditionals on this array."
+              },
+              "consumed_by_cpnp": {
+                "type": "boolean",
+                "description": "DRAFT (SPEC-02-core). True when CPNP-1 consumed render-affecting data from this segment. A Consumer MUST NOT re-apply a consumed segment to the Canonical Buffer."
+              }
+            },
+            "oneOf": [
+              { "required": ["bytes"] },
+              { "required": ["bytes_ref"] }
+            ]
+          },
+          "allOf": [
+            {
+              "$comment": "DRAFT (S2, VER-1.1-draft.md section 10.1). One branch per segment family: where a family occupies two or more entries, every entry of that family MUST carry index. Uniqueness and contiguity of the ordinals are profile-checked — JSON Schema cannot compare two array members.",
+              "if": { "contains": { "type": "object", "required": ["segment"], "properties": { "segment": { "const": "exif" } } }, "minContains": 2 },
+              "then": { "items": { "if": { "type": "object", "required": ["segment"], "properties": { "segment": { "const": "exif" } } }, "then": { "required": ["index"] } } }
+            },
+            {
+              "if": { "contains": { "type": "object", "required": ["segment"], "properties": { "segment": { "const": "xmp" } } }, "minContains": 2 },
+              "then": { "items": { "if": { "type": "object", "required": ["segment"], "properties": { "segment": { "const": "xmp" } } }, "then": { "required": ["index"] } } }
+            },
+            {
+              "if": { "contains": { "type": "object", "required": ["segment"], "properties": { "segment": { "const": "iptc-iim" } } }, "minContains": 2 },
+              "then": { "items": { "if": { "type": "object", "required": ["segment"], "properties": { "segment": { "const": "iptc-iim" } } }, "then": { "required": ["index"] } } }
+            },
+            {
+              "if": { "contains": { "type": "object", "required": ["segment"], "properties": { "segment": { "const": "icc" } } }, "minContains": 2 },
+              "then": { "items": { "if": { "type": "object", "required": ["segment"], "properties": { "segment": { "const": "icc" } } }, "then": { "required": ["index"] } } }
+            },
+            {
+              "if": { "contains": { "type": "object", "required": ["segment"], "properties": { "segment": { "const": "c2pa" } } }, "minContains": 2 },
+              "then": { "items": { "if": { "type": "object", "required": ["segment"], "properties": { "segment": { "const": "c2pa" } } }, "then": { "required": ["index"] } } }
+            },
+            {
+              "if": { "contains": { "type": "object", "required": ["segment"], "properties": { "segment": { "const": "other" } } }, "minContains": 2 },
+              "then": { "items": { "if": { "type": "object", "required": ["segment"], "properties": { "segment": { "const": "other" } } }, "then": { "required": ["index"] } } }
+            }
+          ]
+        },
+        "availability": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "exif": { "$ref": "#/$defs/availabilityState" },
+            "xmp": { "$ref": "#/$defs/availabilityState" },
+            "iptc": { "$ref": "#/$defs/availabilityState" },
+            "icc": { "$ref": "#/$defs/availabilityState" },
+            "c2pa": { "$ref": "#/$defs/availabilityState" },
+            "other": { "$ref": "#/$defs/availabilityState" }
+          }
+        },
+        "availability_basis": {
+          "description": "Narrative basis, REQUIRED when any family is stripped_suspected (profile rule VER901). DRAFT (SCH-13): the object form states a basis per family; the string form is the 1.0 record-scoped form and remains valid.",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": false,
+              "properties": {
+                "exif": { "type": "string", "minLength": 1 },
+                "xmp": { "type": "string", "minLength": 1 },
+                "iptc": { "type": "string", "minLength": 1 },
+                "icc": { "type": "string", "minLength": 1 },
+                "c2pa": { "type": "string", "minLength": 1 },
+                "other": { "type": "string", "minLength": 1 }
+              }
+            }
+          ]
+        },
+        "normalized": {
+          "type": "object",
+          "description": "Reconciled view; IPTC Photo Metadata JSON-LD vocabulary preferred. DRAFT: a value removed under section 7.5 is replaced in place by the redacted-value object of VER-1.1-draft.md section 5.2. Any top-level value that is an object carrying a \"redacted\" member MUST be exactly that object; nested occurrences are profile-checked, because the rest of this view's vocabulary belongs to IPTC and not to VER.",
+          "additionalProperties": {
+            "if": { "type": "object", "required": ["redacted"] },
+            "then": { "$ref": "#/$defs/redactedValue" }
+          }
+        },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["field", "values"],
+            "additionalProperties": false,
+            "properties": {
+              "field": { "type": "string" },
+              "values": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "object",
+                  "required": ["source", "value"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": { "enum": ["c2pa", "xmp", "iptc-iim", "exif", "platform"] },
+                    "value": true,
+                    "trust": { "$ref": "#/$defs/trustTier" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "trust": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["field", "tier"],
+            "additionalProperties": false,
+            "properties": { "field": { "type": "string" }, "tier": { "$ref": "#/$defs/trustTier" } }
+          }
+        },
+        "redactions": {
+          "type": "array",
+          "description": "DRAFT (ADR-0006, decided — revised Option A). The record-level redaction ledger. The 1.0.x member salted_sha256 is renamed and reshaped here as commitment_sha256 + commitment_alg; a producer-performed redaction REQUIRES the commitment, and an upstream-withheld one MUST NOT carry it.",
+          "items": {
+            "type": "object",
+            "required": ["field", "reason", "state"],
+            "additionalProperties": false,
+            "properties": {
+              "field": { "type": "string", "minLength": 1 },
+              "reason": { "type": "string", "minLength": 1 },
+              "state": {
+                "enum": ["producer_performed", "upstream_withheld"],
+                "description": "DRAFT (ADR-0006 ruling). producer_performed: the Producer held the value and removed it — a commitment is possible and is therefore REQUIRED. upstream_withheld: the Producer never received the value, so no commitment over it can exist and none may be asserted."
+              },
+              "commitment_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$",
+                "description": "DRAFT (ADR-0006 ruling). The salted commitment over the removed value, constructed per VER-1.1-draft.md section 5.3. It binds the Producer to the value no later than signing time; it is not evidence that the value ever existed in the Asset."
+              },
+              "commitment_alg": { "const": "ver-redaction-commitment/1" },
+              "normalized_pointer": {
+                "type": "string",
+                "pattern": "^(/([^/~]|~[01])*)*$",
+                "description": "DRAFT. RFC 6901 JSON Pointer, relative to metadata.normalized, of the redacted-value object (VER-1.1-draft.md section 5.2) that stands in for the removed value."
+              }
+            },
+            "allOf": [
+              {
+                "$comment": "DRAFT (ADR-0006 ruling). A producer-performed redaction REQUIRES a commitment and its algorithm identifier.",
+                "if": { "required": ["state"], "properties": { "state": { "const": "producer_performed" } } },
+                "then": { "required": ["commitment_sha256", "commitment_alg"] }
+              },
+              {
+                "$comment": "DRAFT (ADR-0006 ruling). upstream_withheld means the value was never held; asserting a commitment over it would be a fabrication.",
+                "if": { "required": ["state"], "properties": { "state": { "const": "upstream_withheld" } } },
+                "then": {
+                  "allOf": [
+                    { "not": { "required": ["commitment_sha256"] } },
+                    { "not": { "required": ["commitment_alg"] } }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "allOf": [
+        {
+          "$comment": "DRAFT (S2, VER-1.1-draft.md section 10.3). Where the per-family object form of availability_basis is used, every family whose state is stripped_suspected MUST carry a non-empty entry. One branch per family; the string form is unaffected.",
+          "if": {
+            "required": ["availability", "availability_basis"],
+            "properties": {
+              "availability": { "required": ["exif"], "properties": { "exif": { "const": "stripped_suspected" } } },
+              "availability_basis": { "type": "object" }
+            }
+          },
+          "then": { "properties": { "availability_basis": { "required": ["exif"] } } }
+        },
+        {
+          "if": {
+            "required": ["availability", "availability_basis"],
+            "properties": {
+              "availability": { "required": ["xmp"], "properties": { "xmp": { "const": "stripped_suspected" } } },
+              "availability_basis": { "type": "object" }
+            }
+          },
+          "then": { "properties": { "availability_basis": { "required": ["xmp"] } } }
+        },
+        {
+          "if": {
+            "required": ["availability", "availability_basis"],
+            "properties": {
+              "availability": { "required": ["iptc"], "properties": { "iptc": { "const": "stripped_suspected" } } },
+              "availability_basis": { "type": "object" }
+            }
+          },
+          "then": { "properties": { "availability_basis": { "required": ["iptc"] } } }
+        },
+        {
+          "if": {
+            "required": ["availability", "availability_basis"],
+            "properties": {
+              "availability": { "required": ["icc"], "properties": { "icc": { "const": "stripped_suspected" } } },
+              "availability_basis": { "type": "object" }
+            }
+          },
+          "then": { "properties": { "availability_basis": { "required": ["icc"] } } }
+        },
+        {
+          "if": {
+            "required": ["availability", "availability_basis"],
+            "properties": {
+              "availability": { "required": ["c2pa"], "properties": { "c2pa": { "const": "stripped_suspected" } } },
+              "availability_basis": { "type": "object" }
+            }
+          },
+          "then": { "properties": { "availability_basis": { "required": ["c2pa"] } } }
+        },
+        {
+          "if": {
+            "required": ["availability", "availability_basis"],
+            "properties": {
+              "availability": { "required": ["other"], "properties": { "other": { "const": "stripped_suspected" } } },
+              "availability_basis": { "type": "object" }
+            }
+          },
+          "then": { "properties": { "availability_basis": { "required": ["other"] } } }
+        }
+      ]
+    },
+
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "acquisition": {
+          "type": "object",
+          "required": ["method", "acquired_at"],
+          "additionalProperties": false,
+          "properties": {
+            "method": { "enum": ["camera_capture", "http_fetch", "user_upload", "dataset_import", "other"] },
+            "source_uri": {
+              "type": "string",
+              "format": "uri",
+              "description": "Where the Asset was fetched from. Deliberately NOT digest-coupled: the bytes it names are already covered by identity.content_hash and, where present, image.source_bytes_ref.sha256 (annex E25)."
+            },
+            "acquired_at": { "type": "string", "format": "date-time" },
+            "actor": { "type": "string" }
+          }
+        },
+        "registry": {
+          "type": "object",
+          "description": "DRAFT (ADR-0004 ruling, condition (b)). The VER Registry snapshot this Record's registry-dependent values were minted against. REQUIRED when the chain carries a bare action token outside the sixteen this specification itself defines. A registry entry is never reused and a deprecation never invalidates history, so a Consumer resolving a token consults the named snapshot rather than the live registry.",
+          "required": ["version", "sha256"],
+          "additionalProperties": false,
+          "properties": {
+            "version": { "type": "string", "minLength": 1 },
+            "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "uri": { "type": "string", "format": "uri" }
+          }
+        },
+        "chain": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["at", "actor", "action", "tool"],
+            "additionalProperties": false,
+            "properties": {
+              "at": { "type": "string", "format": "date-time" },
+              "actor": { "type": "string" },
+              "action": {
+                "type": "string",
+                "pattern": "^([a-z][a-z0-9_]{0,63}|[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+/[a-z][a-z0-9_]{0,63})$",
+                "description": "DRAFT (ADR-0004). Syntactically open value space with a registry. Sixteen bare tokens are defined by this specification: decode, normalize, embed, transcode, redact, import (the closed core set, must-understand) and publish, export, compose, upscale, crop, resize, color_adjust, denoise, generate, sign (registered at 1.1). Any other bare token MUST be an active entry of a named VER Registry snapshot; any unregistered value MUST be namespaced as <reverse-dns-authority>/<token>. The pattern admits both forms; registry membership is checked by the profile, not by this schema."
+              },
+              "target": {
+                "enum": ["asset", "record"],
+                "default": "asset",
+                "description": "DRAFT (ADR-0004 ruling, condition (d)). What the event acted on. Absent means \"asset\". A sign event acts on the Record."
+              },
+              "uri": {
+                "type": "string",
+                "format": "uri",
+                "description": "DRAFT (ADR-0004 ruling, condition (e)). Where the event's output was placed — the publication URI for a publish event, the rendition's location for an export. Deliberately NOT digest-coupled: it names a location, not a content-addressed artifact whose integrity this Record binds."
+              },
+              "tool": { "type": "string" },
+              "params_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            },
+            "allOf": [
+              {
+                "$comment": "DRAFT (ADR-0004 ruling, condition (d)). sign acts on the Record; where target is stated for a sign event it MUST say so.",
+                "if": { "required": ["action"], "properties": { "action": { "const": "sign" } } },
+                "then": { "properties": { "target": { "const": "record" } } }
+              }
+            ]
+          }
+        },
+        "c2pa": {
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": ["valid", "invalid", "missing", "unverifiable"],
+              "description": "DRAFT (App. D #12). \"unverifiable\": a manifest is present and structurally well-formed and validation could not be completed — unreachable trust list, unimplemented claim generator, missing credential. It is never a substitute for \"invalid\"."
+            },
+            "manifest_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "reason": {
+              "description": "DRAFT (S6). Machine-readable reason validation could not be completed. REQUIRED when status is \"unverifiable\", forbidden otherwise. Either one of the six core tokens or an authority-namespaced escape <reverse-dns-authority>/x-<token>.",
+              "type": "string",
+              "oneOf": [
+                { "enum": ["unsupported_algorithm", "trust_store_unavailable", "manifest_malformed", "network_unavailable", "credential_unavailable", "validator_error"] },
+                { "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+/x-[a-z][a-z0-9_]{0,63}$" }
+              ]
+            },
+            "error_detail": {
+              "type": "string",
+              "description": "DRAFT (S6). OPTIONAL and non-normative: free human-readable detail. A Consumer MUST NOT branch on it; the machine-readable signal is reason."
+            }
+          },
+          "allOf": [
+            {
+              "$comment": "DRAFT (S6). VER-1.1-draft.md section 6: reason is REQUIRED when status is \"unverifiable\" and MUST NOT be present otherwise. error_detail is optional in every state and is not part of this conditional.",
+              "if": { "required": ["status"], "properties": { "status": { "const": "unverifiable" } } },
+              "then": { "required": ["reason"] },
+              "else": { "not": { "required": ["reason"] } }
+            }
+          ]
+        },
+        "signature": {
+          "type": "object",
+          "required": ["format", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "format": { "enum": ["jws-detached", "cose-sign1"] },
+            "canonicalization": { "const": "rfc8785-jcs" },
+            "value": { "type": "string" },
+            "key_id": { "type": "string" }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "$comment": "DRAFT (ADR-0004 ruling, condition (e)). A sign event MUST NOT appear without the signature it describes. sign is a 1.1-only action value.",
+          "if": {
+            "required": ["chain"],
+            "properties": {
+              "chain": {
+                "type": "array",
+                "contains": { "type": "object", "required": ["action"], "properties": { "action": { "const": "sign" } } }
+              }
+            }
+          },
+          "then": { "required": ["signature"] }
+        },
+        {
+          "$comment": "DRAFT (ADR-0004 ruling, condition (b)). A bare action token outside the sixteen this specification defines is registry-dependent, so the Record MUST name the registry snapshot it was minted against. Authority-namespaced tokens need no snapshot: their authority defines them.",
+          "if": {
+            "required": ["chain"],
+            "properties": {
+              "chain": {
+                "type": "array",
+                "contains": {
+                  "type": "object",
+                  "required": ["action"],
+                  "properties": {
+                    "action": {
+                      "allOf": [
+                        { "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+                        { "not": { "enum": ["decode", "normalize", "embed", "transcode", "redact", "import", "publish", "export", "compose", "upscale", "crop", "resize", "color_adjust", "denoise", "generate", "sign"] } }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": { "required": ["registry"] }
+        }
+      ]
+    }
+  },
+
+  "allOf": [
+    {
+      "$comment": "DRAFT. VER-1.1-draft.md section 3.3: a Record carrying a compose chain event MUST carry lineage with at least two composed parents. \"compose\" is a 1.1-only action value.",
+      "if": {
+        "type": "object",
+        "required": ["provenance"],
+        "properties": {
+          "provenance": {
+            "type": "object",
+            "required": ["chain"],
+            "properties": {
+              "chain": {
+                "type": "array",
+                "contains": {
+                  "type": "object",
+                  "required": ["action"],
+                  "properties": { "action": { "const": "compose" } }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": ["lineage"],
+        "properties": {
+          "lineage": {
+            "properties": {
+              "parents": {
+                "minContains": 2,
+                "contains": {
+                  "type": "object",
+                  "required": ["relation"],
+                  "properties": { "relation": { "const": "composed" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+
+  "$defs": {
+    "sha256Hash": {
+      "$comment": "DRAFT (S1). Closed in 1.1. In 1.0.x this object was left open by oversight (SCH-04) and identity.pixel_hash composed it through allOf, which is why closure could not be applied here in a patch. 1.1 gives pixel_hash its own definition instead, so both can be closed.",
+      "type": "object",
+      "required": ["alg", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "alg": { "const": "sha-256" },
+        "value": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "pixelHash": {
+      "type": "object",
+      "required": ["alg", "value", "width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "alg": { "const": "sha-256" },
+        "value": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "byteRef": {
+      "type": "object",
+      "required": ["uri", "sha256", "byte_length"],
+      "additionalProperties": false,
+      "properties": {
+        "uri": { "type": "string", "format": "uri" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "byte_length": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "availabilityState": {
+      "enum": ["present", "absent", "stripped_suspected", "redacted", "unknown", "upstream_withheld"],
+      "description": "DRAFT (ADR-0006 ruling). \"upstream_withheld\" is the 1.1 addition: the Producer never received the family's values, so it can neither preserve them nor commit to them. It is distinct from \"stripped_suspected\" (a belief about what an upstream did) and from \"redacted\" (the Producer held the values and removed them)."
+    },
+    "trustTier": { "enum": ["c2pa_verified", "signed_unverified", "unsigned"] },
+    "redactedValue": {
+      "$comment": "DRAFT (ADR-0006 ruling). The in-normalized-view replacement for a removed value (VER-1.1-draft.md section 5.2). Encoded in 1.1 because ADR-0006 is decided; in 1.0.x it was prose only.",
+      "type": "object",
+      "required": ["redacted", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "redacted": { "const": true },
+        "reason": { "type": "string", "minLength": 1 },
+        "commitment_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "commitment_alg": { "const": "ver-redaction-commitment/1" }
+      },
+      "allOf": [
+        { "if": { "required": ["commitment_sha256"] }, "then": { "required": ["commitment_alg"] } },
+        { "if": { "required": ["commitment_alg"] }, "then": { "required": ["commitment_sha256"] } }
+      ]
+    },
+    "lineageParent": {
+      "$comment": "DRAFT (ADR-0005 ruling). A parent reference MUST carry at least one GLOBALLY RESOLVABLE identifier: record_uri, or the pair {producer_id, record_id}. A bare record_id no longer satisfies that rule — annex E16 makes record_id producer-scoped, so alone it resolves nowhere — and may only accompany. content_hash SHOULD be present whenever the Producer holds the parent bytes; pixel_hash never satisfies the rule and resolves to a candidate, never to an identity (annex E27).",
+      "type": "object",
+      "required": ["relation"],
+      "additionalProperties": false,
+      "properties": {
+        "record_uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "Absolute URI resolving to the parent's Record."
+        },
+        "producer_id": {
+          "type": "string",
+          "format": "uri",
+          "description": "Absolute URI or DID naming the producer whose namespace record_id belongs to."
+        },
+        "record_id": { "type": "string", "format": "uuid" },
+        "content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "pixel_hash": {
+          "type": "object",
+          "required": ["value", "cpnp_version"],
+          "additionalProperties": false,
+          "properties": {
+            "value": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "cpnp_version": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+$",
+              "description": "The pixel-hash universe the value belongs to (1.0 section 13, annex E10). A Consumer MUST NOT match this value against a digest from a different universe."
+            }
+          }
+        },
+        "relation": { "enum": ["derived", "composed", "exported"] },
+        "note": { "type": "string" }
+      },
+      "anyOf": [
+        { "required": ["record_uri"] },
+        { "required": ["producer_id", "record_id"] }
+      ]
+    },
+    "spaceDescriptor": {
+      "type": "object",
+      "required": ["space_id", "kind", "dim", "dtype", "normalization", "metric", "preprocessing"],
+      "additionalProperties": false,
+      "properties": {
+        "space_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*(\\.[a-z0-9-]+)+/[0-9]+\\.[0-9]+(\\.[0-9]+)?(-[0-9a-z][0-9a-z.-]*)?(\\+[0-9a-z][0-9a-z.-]*)?$",
+          "description": "Immutable: reverse-DNS authority + '/' + version. DRAFT (SCHEMA-05, SCH-10): the first authority label may now contain hyphens, and semver prerelease and build metadata are accepted. This is a pure widening of the 1.0.1 pattern ^[a-z0-9]+(\\.[a-z0-9-]+)+/[0-9]+\\.[0-9]+(\\.[0-9]+)?$ — every string the 1.0.1 pattern accepts, this one accepts. Labels after the first keep the 1.0.1 character class exactly, hyphens at their edges included, because narrowing them would reject published identifiers; VER-1.1-draft.md section 11.6 asks new identifiers not to use edge hyphens. New weights, preprocessing, dtype, metric, or fusion recipe => new space_id."
+        },
+        "kind": {
+          "enum": ["visual", "text", "fused", "joint_visual_text"],
+          "description": "DRAFT (SPEC-07-emb). \"joint_visual_text\" is a single space whose weights embed images and text into one geometry (CLIP/SigLIP-class). It is legal for canonical_visual embeddings AND for text-derived contextual embeddings."
+        },
+        "model": { "$ref": "#/$defs/modelDescriptor" },
+        "derived_from": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string" },
+          "description": "DRAFT (SCHEMA-07). For kind \"fused\": the space_ids this space is derived from. Present instead of, or alongside, a model block."
+        },
+        "dim": { "type": "integer", "minimum": 1 },
+        "dtype": { "enum": ["fp32", "fp16", "bf16", "int8", "binary"] },
+        "normalization": { "enum": ["l2", "none"] },
+        "metric": {
+          "enum": ["cosine", "dot", "l2", "hamming"],
+          "description": "DRAFT (SPEC-19). \"hamming\" is the metric for dtype \"binary\" and only for it; for dtype \"binary\", dim counts bits and normalization MUST be \"none\". Both directions are encoded below."
+        },
+        "preprocessing": {
+          "type": "object",
+          "description": "Visual: resize policy, interpolation, antialias, crop, mean, std, channel_order. Text: tokenizer id + sha256, max_length, truncation, casing. A joint_visual_text space states both halves. Per-kind member lists are graded by the profile (VER405, annex E13) rather than encoded here — see VER-1.1-draft.md section 15.1(c).",
+          "additionalProperties": true
+        },
+        "reference": { "$ref": "#/$defs/referenceClaim" },
+        "descriptor_uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "DRAFT (SPEC-22). Where the authoritative published descriptor for this space_id is retrievable. Present ⇒ descriptor_sha256 REQUIRED."
+        },
+        "descriptor_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "DRAFT (SPEC-22). SHA-256 of the RFC 8785 JCS serialization of the published descriptor with the descriptor_sha256 member removed. Lets a Consumer detect an inline copy that has drifted from the published form."
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "publisher": { "type": "string" },
+            "published_at": { "type": "string", "format": "date-time" },
+            "license": { "type": "string" }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["kind"],
+            "properties": { "kind": { "enum": ["visual", "text", "joint_visual_text"] } }
+          },
+          "then": { "required": ["model"] }
+        },
+        {
+          "$comment": "DRAFT (S2, ADR-0008 ruling, VER-1.1-draft.md section 11.2). A binary space's metric is hamming and its normalization is none. Stated in 1.0.x prose; encoded from 1.1.",
+          "if": { "required": ["dtype"], "properties": { "dtype": { "const": "binary" } } },
+          "then": { "properties": { "metric": { "const": "hamming" }, "normalization": { "const": "none" } } }
+        },
+        {
+          "$comment": "DRAFT (S2). The converse: hamming is the metric of a bit vector and of nothing else.",
+          "if": { "required": ["metric"], "properties": { "metric": { "const": "hamming" } } },
+          "then": { "properties": { "dtype": { "const": "binary" } } }
+        },
+        {
+          "$comment": "DRAFT (S5). A binary space's conformance claim is stated in its own metric: tolerance_hamming_max is REQUIRED and the cosine tolerances MUST NOT be used, because a cosine floor over the ±1 expansion is not the quantity a binary retrieval system measures.",
+          "if": {
+            "required": ["dtype", "reference"],
+            "properties": { "dtype": { "const": "binary" } }
+          },
+          "then": {
+            "properties": {
+              "reference": {
+                "required": ["tolerance_hamming_max"],
+                "allOf": [
+                  { "not": { "required": ["tolerance_cosine"] } },
+                  { "not": { "required": ["tolerance_cosine_p5"] } },
+                  { "not": { "required": ["tolerance_cosine_worst"] } }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "$comment": "DRAFT (S2, VER-1.1-draft.md section 8.2). The retained floor: a float space's mean-cosine tolerance MUST be at least 0.99. Stated in 1.0.x prose and annex note N5; encoded from 1.1.",
+          "if": {
+            "required": ["dtype", "reference"],
+            "properties": { "dtype": { "enum": ["fp32", "fp16", "bf16"] } }
+          },
+          "then": {
+            "properties": {
+              "reference": {
+                "required": ["tolerance_cosine"],
+                "properties": { "tolerance_cosine": { "minimum": 0.99 } }
+              }
+            }
+          }
+        },
+        {
+          "$comment": "DRAFT (S5). A quantized int8 space states a cosine tolerance and MAY declare it below the float floor, with the justification published in the descriptor.",
+          "if": {
+            "required": ["dtype", "reference"],
+            "properties": { "dtype": { "const": "int8" } }
+          },
+          "then": { "properties": { "reference": { "required": ["tolerance_cosine"] } } }
+        },
+        {
+          "$comment": "DRAFT (S4). An integrity-relevant URI present ⇒ its digest REQUIRED.",
+          "if": { "required": ["descriptor_uri"] },
+          "then": { "required": ["descriptor_sha256"] }
+        }
+      ]
+    },
+    "referenceClaim": {
+      "$comment": "DRAFT (S1, S4). Closed in 1.1. set_manifest_sha256 is REQUIRED: a reference block IS a conformance claim, and a claim bound only to a URI is a claim about whatever that URI serves today.",
+      "type": "object",
+      "required": ["set_uri", "set_manifest_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "set_uri": { "type": "string", "format": "uri" },
+        "set_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "DRAFT. SHA-256 of the RFC 8785 JCS serialization of the reference-set manifest, binding the declared tolerances to an exact set of reference images and reference vectors."
+        },
+        "tolerance_cosine": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "tolerance_cosine_p5": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "DRAFT (App. D #6). 5th-percentile per-item cosine floor. A mean-only tolerance passes an implementation with one catastrophic outlier."
+        },
+        "tolerance_cosine_worst": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "DRAFT (App. D #6). Worst single-item cosine floor over the reference set."
+        },
+        "tolerance_hamming_max": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "DRAFT (S5). The native binary-space tolerance: the maximum Hamming distance, in bits, between a reference vector and a re-computed one. REQUIRED for a binary space's reference claim. It MUST NOT exceed the space's dim; the schema cannot compare two members, so that bound is profile-checked."
+        }
+      }
+    },
+    "modelDescriptor": {
+      "$comment": "DRAFT (S1, ADR-0007 ruling). Closed in 1.1. weights_sha256 KEEPS its 1.0 reading (annex E29) — no defined preimage, comparable only within a producer — and is not redefined here. The reproducible cross-producer pin is bundle.manifest_sha256.",
+      "type": "object",
+      "required": ["family", "checkpoint", "weights_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "family": { "type": "string" },
+        "architecture": { "type": "string" },
+        "checkpoint": { "type": "string" },
+        "checkpoint_uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "DRAFT (ADR-0007 ruling). Where the checkpoint is remotely resolvable. Present ⇒ revision REQUIRED: a remote checkpoint identifier without an immutable revision denotes whatever the remote serves today, which is a section 6.2 immutability violation waiting to happen (SC-05)."
+        },
+        "revision": {
+          "type": "string",
+          "description": "DRAFT (SC-05). Immutable checkpoint revision — a commit id or content digest, never a mutable branch name."
+        },
+        "weights_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "The 1.0 weight pin, with its 1.0 reading unchanged (annex E29): SHA-256, lowercase hex, over an artifact the Producer chooses and SHOULD document. It is a within-producer consistency signal and MUST NOT be compared across producers. Cross-producer comparison is what bundle.manifest_sha256 is for."
+        },
+        "bundle": { "$ref": "#/$defs/bundleManifest" },
+        "artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "description": "DRAFT (ADR-0007 ruling). Typed non-checkpoint artifacts that affect this space's output — tokenizer, PCA basis, quantization codebook, processor configuration. They are part of the space's identity under 1.0 section 6.2 and are pinned here rather than inside the bundle, which describes a checkpoint.",
+          "items": {
+            "type": "object",
+            "required": ["role", "sha256", "byte_length"],
+            "additionalProperties": false,
+            "properties": {
+              "role": { "enum": ["tokenizer", "pca_basis", "codebook", "processor", "normalizer", "other"] },
+              "path": { "$ref": "#/$defs/portablePath" },
+              "uri": { "type": "string", "format": "uri" },
+              "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+              "byte_length": { "type": "integer", "minimum": 0 }
+            },
+            "anyOf": [
+              { "required": ["path"] },
+              { "required": ["uri"] }
+            ]
+          }
+        }
+      },
+      "allOf": [
+        {
+          "$comment": "DRAFT (ADR-0007 ruling). A remotely resolvable checkpoint MUST pin a revision.",
+          "if": { "required": ["checkpoint_uri"] },
+          "then": { "required": ["revision"] }
+        }
+      ]
+    },
+    "portablePath": {
+      "$comment": "DRAFT (ADR-0007 ruling). A path relative to the checkpoint root. The pattern admits only the printable portable charset [A-Za-z0-9._-] per segment with '/' as the only separator; the companion `not` rejects any character outside that set anywhere in the string, which closes backslash, colon, NUL, control characters and a trailing newline in one keyword rather than relying on a validator's reading of `$`. Segments are non-empty and are never \".\" or \"..\", and no leading '/' is admitted. Uniqueness of paths within a manifest, and the rule that verification MUST resolve beneath a verified root without following symlinks, are stated in VER-1.1-draft.md section 4.2 and enforced by the profile.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^([A-Za-z0-9_-][A-Za-z0-9._-]*|\\.[A-Za-z0-9_-][A-Za-z0-9._-]*|\\.\\.[A-Za-z0-9._-]+)(/([A-Za-z0-9_-][A-Za-z0-9._-]*|\\.[A-Za-z0-9_-][A-Za-z0-9._-]*|\\.\\.[A-Za-z0-9._-]+))*$",
+      "not": { "pattern": "[^A-Za-z0-9._/-]" }
+    },
+    "bundleManifest": {
+      "type": "object",
+      "description": "DRAFT (ADR-0007 ruling). The file set a checkpoint consists of, with its own digest. bundle_digest_alg names the construction intrinsically: \"ver-bundle-manifest/1\" is SHA-256 over the RFC 8785 JCS serialization of {\"files\": [...]} with entries pre-sorted byte-wise ascending by the UTF-8 encoding of path. The digest proves the integrity of the LIST, not its completeness: membership is defined by the space publisher and no digest can attest to a file nobody listed.",
+      "required": ["bundle_digest_alg", "manifest_sha256", "files"],
+      "additionalProperties": false,
+      "properties": {
+        "bundle_digest_alg": { "const": "ver-bundle-manifest/1" },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "DRAFT (ADR-0007 ruling). The bundle's own digest, computed per bundle_digest_alg. This — not weights_sha256 — is the reproducible cross-producer checkpoint pin."
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["path", "byte_length", "sha256"],
+            "additionalProperties": false,
+            "properties": {
+              "path": { "$ref": "#/$defs/portablePath" },
+              "byte_length": { "type": "integer", "minimum": 0 },
+              "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            }
+          }
+        }
+      }
+    },
+    "compute": {
+      "type": "object",
+      "description": "DRAFT. What actually computed this vector. Records the runtime nondeterminism that 1.0 section 6.2's tolerance absorbs, so a tolerance failure can be attributed.",
+      "additionalProperties": false,
+      "properties": {
+        "runtime": { "type": "string" },
+        "runtime_version": { "type": "string" },
+        "precision": { "enum": ["fp32", "fp16", "bf16", "int8", "mixed"] },
+        "device_class": { "enum": ["cpu", "gpu", "npu", "tpu", "other"] }
+      }
+    },
+    "embedding": {
+      "type": "object",
+      "$comment": "DRAFT (ADR-0008). dim and dtype are REQUIRED only for records declaring ver_version \"1.1\". This schema is version-pinned — ver_version is const \"1.1\" — so the flat required entry below IS the ver_version-gated form: the const already partitions the document set, and an if/then on the sibling ver_version would test a condition true of every instance this schema can accept. A multi-version schema would need the conditional. 1.0.x records are judged by ver-record-1.0.1.json, which requires neither member.",
+      "required": ["role", "space_id", "dim", "dtype"],
+      "additionalProperties": false,
+      "properties": {
+        "role": { "enum": ["canonical_visual", "contextual", "fused"] },
+        "space_id": { "type": "string" },
+        "dim": { "type": "integer", "minimum": 1, "description": "DRAFT (ADR-0008): REQUIRED for records declaring ver_version \"1.1\". MUST equal the referenced descriptor's dim (VER601). For dtype \"binary\", dim counts bits." },
+        "dtype": { "enum": ["fp32", "fp16", "bf16", "int8", "binary"], "description": "DRAFT (ADR-0008): REQUIRED for records declaring ver_version \"1.1\". MUST equal the referenced descriptor's dtype (VER602)." },
+        "vector": { "type": "array", "items": { "type": "number" } },
+        "vector_b64": { "type": "string", "contentEncoding": "base64", "description": "RFC 4648 section 4 base64, padded and unwrapped, of the little-endian component bytes. For dtype \"binary\": 8 components per octet, most-significant-bit first within each octet, in ascending component order, ceil(dim/8) octets total (annex E24). The byte-length arithmetic relates two members and is profile-checked (VER603-VER605)." },
+        "vector_ref": { "$ref": "#/$defs/byteRef" },
+        "produced_at": { "type": "string", "format": "date-time" },
+        "producer": { "type": "string" },
+        "compute": { "$ref": "#/$defs/compute" },
+        "source": {
+          "type": "object",
+          "required": ["class", "text_sha256"],
+          "additionalProperties": false,
+          "properties": {
+            "class": { "enum": ["ocr_pixels", "caption_auto", "caption_human", "alt_text", "title", "description", "surrounding_text", "page_context"] },
+            "text_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "lang": { "type": "string" },
+            "provenance": { "type": "string" }
+          }
+        },
+        "recipe": {
+          "$comment": "DRAFT (S1). Closed in 1.1.",
+          "type": "object",
+          "required": ["inputs", "method"],
+          "additionalProperties": false,
+          "properties": {
+            "inputs": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 2,
+              "description": "space_id values declared in this Record's spaces[] array (annex E20)."
+            },
+            "weights": { "type": "array", "items": { "type": "number" } },
+            "method": { "type": "string" }
+          }
+        }
+      },
+      "oneOf": [
+        { "required": ["vector"] },
+        { "required": ["vector_b64"] },
+        { "required": ["vector_ref"] }
+      ],
+      "allOf": [
+        { "if": { "properties": { "role": { "const": "contextual" } } }, "then": { "required": ["source"] } },
+        { "if": { "properties": { "role": { "const": "fused" } } }, "then": { "required": ["recipe"] } },
+        {
+          "$comment": "DRAFT (ADR-0008 ruling). A bit vector has no inline float-array carriage: the inline vector array cannot represent packed bits, and expanding them to ±1 floats would publish a different object from the one the space defines.",
+          "if": { "required": ["dtype"], "properties": { "dtype": { "const": "binary" } } },
+          "then": { "not": { "required": ["vector"] } }
+        }
+      ]
+    }
+  }
+}
