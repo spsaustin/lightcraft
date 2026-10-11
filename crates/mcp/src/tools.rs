@@ -156,7 +156,7 @@ pub fn helper_tools(has_ui: bool) -> Vec<Value> {
         tool(
             "search_text",
             "Search photos by words",
-            "Search the library by words, best match first. The keyword lane matches title, keywords (every level), caption, alt text, description, file name, camera, lens and place, with prefix matching (each word is a prefix; any word may match). Each result row carries `lane` (which lane found the photo) and the result carries `cutoff` (the noise ceiling applied; null for the keyword lane), so you can explain why a photo is listed. With `filter` (default true) the library view is also filtered to the results in rank order (sort: relevance; clear the filter to go back); a search that finds nothing leaves the view alone. Returns {photos: [{id, score, lane}], cutoff, lanes, filtered}.",
+            "Search the library by words, best match first. The keyword lane matches title, keywords (every level), caption, alt text, description, file name, camera, lens and place, with prefix matching (each word is a prefix; any word may match). Each result row carries `lane` (which lane found the photo) and the result carries `cutoff` (the noise ceiling applied; null for the keyword lane), so you can explain why a photo is listed. Rows also carry `cosine` (the embedding model's similarity) and `keywordScore` where the lane that found the photo has one, and the result carries `warning` when the vector lane could not run (the keyword results are still returned; `vera_model` says how to enable it). With `filter` (default true) the library view is also filtered to the results in rank order (sort: relevance; clear the filter to go back); a search that finds nothing leaves the view alone. Returns {photos: [{id, score, lane: keyword | vector | both, cosine?, keywordScore?}], cutoff, lanes, filtered, warning?}.",
             json!({
                 "query": {"type": "string", "description": "Words to look for (at most 2000 characters)"},
                 "limit": {"type": "integer", "description": "Most results to return (default 200, max 10000)"},
@@ -178,8 +178,30 @@ pub fn helper_tools(has_ui: bool) -> Vec<Value> {
         tool(
             "vera_status",
             "Search and duplicate lanes",
-            "Which search and duplicate lanes are live: `keyword`, `digest`, `vector` and `describe`, each with a reason when it is not running, plus the fingerprint counts (digested, photos, pendingDigests, unreadable, digests, indexDocs, ignoredPairs) and the sidecar file. Check this before explaining a search or duplicate result.",
+            "Which search and duplicate lanes are live: `keyword`, `digest`, `vector` and `describe`, each with a reason when it is not running, plus the fingerprint counts (digested, photos, pendingDigests, unreadable, digests, indexDocs, ignoredPairs) and the sidecar file. The `vector` lane (search by meaning) reports a state: `live`, `needs_model` (the model is not downloaded; see `vera_model`), `downloading`, `disabled_by_user`, `needs_desktop` (the web build) or `error`, with a reason; the counts include `embedded` and `pendingEmbeddings`, and `spaceBackground` ({mean, sigma, pictures}, or null) is a diagnostic: the mean similarity of random pairs of this library's pictures, which queries are cut against (a mean drifting towards 1 means the pictures all look alike to the model). `model` says whether the model is installed and loaded. Check this before explaining a search or duplicate result.",
             json!({}),
+            &[],
+        ),
+        tool(
+            "photo_similar",
+            "Find photos that look alike",
+            "Find the photos that look like one photo, by the embedding model's cosine similarity, best first. Only photos above this query's noise ceiling (`cutoff`) are listed, and the ceiling is capped so a near duplicate is never cut. Needs the search-by-meaning model: without it this is an error saying the vector lane is \"not ready\" (`vera_model` says why and how to get it). `pendingEmbeddings` counts the photos not embedded yet; they cannot appear until they are. Returns {id, photos: [{id, cosine, lane}], cutoff, embedded, pendingEmbeddings, filtered}. With `filter` (default true) the library view shows the photo and the results in rank order (clear the filter to go back).",
+            json!({
+                "id": {"type": "integer", "description": "Photo id (default: the active photo)"},
+                "limit": {"type": "integer", "description": "Most rows to return (default 50, max 10000)"},
+                "filter": {"type": "boolean", "description": "Also filter the library view to the photo and its look-alikes (default true)"}
+            }),
+            &[],
+        ),
+        tool(
+            "vera_model",
+            "The search-by-meaning model",
+            "Manage the model behind finding photos by meaning (SigLIP 2). `action`: `status` (default; read-only) returns {installed, state, loaded, bytes, dir?, downloading?, downloadError?, licence: {name, url, notice}}; `download` fetches it in the background; `cancel` stops a download (what arrived is kept and resumed); `remove` deletes the model's weights AND this library's embedding sidecar (searching by meaning stops until it is downloaded again); `config` with `vectorLane` switches the vector lane on or off for this library (the vectors made so far stay). The download is 1.5 GB from Hugging Face under the Apache License 2.0 and starts ONLY with `acceptLicense: true`, after the licence notice (`status` returns it as `licence.notice` and `licence.url`) has been shown to the user; without it the call is refused. Because one tool carries both a read-only action and writing ones, it is annotated as destructive and not read-only; use `status` freely.",
+            json!({
+                "action": {"type": "string", "enum": ["status", "download", "cancel", "remove", "config"], "description": "What to do (default status)"},
+                "acceptLicense": {"type": "boolean", "description": "download only: true once the user has been shown the licence notice and accepted it"},
+                "vectorLane": {"type": "boolean", "description": "config only: switch the vector lane (search by meaning) on or off for this library"}
+            }),
             &[],
         ),
         tool(
@@ -411,7 +433,7 @@ fn annotations(name: &str, title: &str) -> Value {
     let files = matches!(name, "export" | "render_photo" | "screenshot");
     // Like `select_photos`, these can change the view (their `filter` argument), so they are not
     // read-only; unlike it they never edit or delete anything, and repeating one changes nothing more.
-    let view = matches!(name, "search_text" | "photo_duplicates");
+    let view = matches!(name, "search_text" | "photo_duplicates" | "photo_similar");
     json!({"title": title, "readOnlyHint": read_only, "destructiveHint": !read_only && !files && !view,
         "idempotentHint": read_only || view || matches!(name, "render_photo" | "screenshot"), "openWorldHint": false})
 }
@@ -578,6 +600,32 @@ fn obj(args: &Value, keys: &[&str]) -> Value {
     Value::Object(m)
 }
 
+/// `vera_model`: dispatch `action` to the engine's `vera.model.*` / `vera.config` commands. An unknown
+/// action is refused here, before the engine is called. `acceptLicense` is forwarded only to `download`
+/// (and only as given: the engine refuses a download without `true`), `vectorLane` only to `config`.
+fn vera_model(b: &mut dyn Backend, args: &Value) -> ToolResult {
+    let action = match args.get("action").filter(|v| !v.is_null()) {
+        None => "status",
+        Some(v) => match v.as_str() {
+            Some(a) => a,
+            None => return ToolResult::error("`action` must be one of status, download, cancel, remove, config"),
+        },
+    };
+    let (command, params) = match action {
+        "status" => ("vera.model.status", json!({})),
+        "download" => ("vera.model.download", obj(args, &["acceptLicense"])),
+        "cancel" => ("vera.model.cancel", json!({})),
+        "remove" => ("vera.model.remove", json!({})),
+        "config" => ("vera.config", obj(args, &["vectorLane"])),
+        other => {
+            return ToolResult::error(format!(
+                "unknown action \"{other}\" for vera_model; expected one of: status, download, cancel, remove, config"
+            ));
+        }
+    };
+    ToolResult::from(exec(b, command, params))
+}
+
 /// Run one tool.
 pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> ToolResult {
     let args = if args.is_null() { &json!({}) } else { args };
@@ -682,7 +730,9 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> ToolResult {
         "search_text" if args.get("query").is_none_or(Value::is_null) => ToolResult::error("missing `query`"),
         "search_text" => ToolResult::from(exec(b, "search.text", obj(args, &["query", "limit", "filter"]))),
         "photo_duplicates" => ToolResult::from(exec(b, "photo.duplicates", obj(args, &["id", "limit", "filter"]))),
+        "photo_similar" => ToolResult::from(exec(b, "photo.similar", obj(args, &["id", "limit", "filter"]))),
         "vera_status" => ToolResult::from(exec(b, "vera.status", json!({}))),
+        "vera_model" => vera_model(b, args),
         "query_photos" => ToolResult::from(exec(b, "catalog.query", obj(args, &["filter", "sort", "offset", "limit"]))),
         "select_photos" => {
             let mut p = obj(args, &["ids", "active", "mode"]);

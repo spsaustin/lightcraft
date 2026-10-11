@@ -407,7 +407,7 @@ fn vera_tools_are_listed_with_their_arguments() {
     let mut s = server();
     let list = rpc(&mut s, 1, "tools/list", json!({}));
     let tools = list["result"]["tools"].as_array().unwrap();
-    for name in ["search_text", "photo_duplicates", "vera_status"] {
+    for name in ["search_text", "photo_duplicates", "vera_status", "photo_similar", "vera_model"] {
         assert!(tools.iter().any(|t| t["name"] == name), "missing {name}");
     }
     let tool = |n: &str| tools.iter().find(|t| t["name"] == n).unwrap();
@@ -415,12 +415,41 @@ fn vera_tools_are_listed_with_their_arguments() {
     assert_eq!(tool("vera_status")["annotations"]["readOnlyHint"], true);
     assert_eq!(tool("search_text")["annotations"]["readOnlyHint"], false, "filter changes the view, as select_photos does");
     assert_eq!(tool("photo_duplicates")["annotations"]["readOnlyHint"], false);
+    // photo_similar: a view tool like the other two
+    let similar = tool("photo_similar");
+    assert_eq!(similar["inputSchema"]["required"], json!([]));
+    for k in ["id", "limit", "filter"] {
+        assert!(similar["inputSchema"]["properties"].get(k).is_some(), "{k}");
+    }
+    assert_eq!(similar["annotations"]["readOnlyHint"], false, "filter changes the view");
+    assert_eq!(similar["annotations"]["destructiveHint"], false);
+    assert_eq!(similar["annotations"]["idempotentHint"], true);
+    // vera_model: one tool with a read-only action and writing ones is annotated for the worst
+    let model = tool("vera_model");
+    assert_eq!(model["inputSchema"]["properties"]["action"]["enum"], json!(["status", "download", "cancel", "remove", "config"]));
+    for k in ["acceptLicense", "vectorLane"] {
+        assert_eq!(model["inputSchema"]["properties"][k]["type"], "boolean", "{k}");
+    }
+    assert_eq!(model["inputSchema"]["required"], json!([]));
+    assert_eq!(model["annotations"]["readOnlyHint"], false);
+    assert_eq!(model["annotations"]["destructiveHint"], true);
+    assert_eq!(model["annotations"]["idempotentHint"], false);
+    let d = model["description"].as_str().unwrap();
+    for needle in ["1.5 GB", "Hugging Face", "Apache License 2.0", "acceptLicense: true", "licence.notice", "licence.url"] {
+        assert!(d.contains(needle), "description lacks {needle}");
+    }
+    let d = tool("search_text")["description"].as_str().unwrap();
+    assert!(["both", "cosine", "keywordScore", "warning"].iter().all(|w| d.contains(w)), "{d}");
+    let d = tool("vera_status")["description"].as_str().unwrap();
+    assert!(["needs_model", "downloading", "disabled_by_user", "needs_desktop", "spaceBackground"].iter().all(|w| d.contains(w)), "{d}");
     let n = &tool("import")["inputSchema"]["properties"]["onNearDuplicate"];
     assert_eq!(n["enum"], json!(["stack", "import", "skip"]));
     for (name, args) in [
         ("search_text", json!({"query": "x", "misspelled": 1})),
         ("photo_duplicates", json!({"misspelled": 1})),
         ("vera_status", json!({"misspelled": 1})),
+        ("photo_similar", json!({"misspelled": 1})),
+        ("vera_model", json!({"misspelled": 1})),
     ] {
         let r = rpc(&mut s, 2, "tools/call", json!({"name": name, "arguments": args}));
         assert_eq!(r["error"]["code"], -32602, "{r}");
@@ -479,4 +508,114 @@ fn photo_duplicates_returns_the_report_shape() {
     // the default is the active photo; an unknown one is an error
     assert!(!call_tool(&mut b, "photo_duplicates", &json!({})).is_error);
     assert!(call_tool(&mut b, "photo_duplicates", &json!({"id": 9999})).is_error);
+}
+
+/// Without the model the look-alike search is a tool error that says the lane is not ready.
+#[test]
+fn photo_similar_without_the_model_is_not_ready() {
+    let mut b = Headless::demo();
+    let first = b.session.visible_cloned()[0];
+    for args in [json!({}), json!({"id": first.0, "limit": 5, "filter": false})] {
+        let r = call_tool(&mut b, "photo_similar", &args);
+        assert!(r.is_error, "{r:?}");
+        assert!(r.content[0]["text"].as_str().unwrap().contains("not ready"), "{r:?}");
+    }
+    assert!(call_tool(&mut b, "photo_similar", &json!({"id": 9999})).is_error);
+    assert!(call_tool(&mut b, "photo_similar", &json!({"limit": -1})).is_error);
+}
+
+#[test]
+fn vera_model_status_is_the_default_and_carries_the_licence() {
+    let mut b = Headless::demo();
+    for args in [json!({}), json!({"action": "status"})] {
+        let r = call_tool(&mut b, "vera_model", &args);
+        assert!(!r.is_error, "{r:?}");
+        let v = r.structured.unwrap();
+        assert_eq!(v["installed"], false, "{v}");
+        assert!(v["licence"]["notice"].as_str().unwrap().contains("Apache"), "{v}");
+        assert!(v["licence"]["url"].is_string(), "{v}");
+    }
+}
+
+/// The 1.5 GB download is refused without `acceptLicense: true` (no test passes it: no network).
+#[test]
+fn vera_model_download_needs_the_licence_accepted() {
+    let mut b = Headless::demo();
+    for args in [json!({"action": "download"}), json!({"action": "download", "acceptLicense": false})] {
+        let r = call_tool(&mut b, "vera_model", &args);
+        assert!(r.is_error, "{r:?}");
+        let t = r.content[0]["text"].as_str().unwrap();
+        assert!(t.contains("License") && t.contains("Apache"), "{t}");
+        assert!(t.contains("acceptLicense"), "{t}");
+    }
+    let r = call_tool(&mut b, "vera_model", &json!({"action": "cancel"}));
+    assert!(!r.is_error, "{r:?}");
+    assert_eq!(r.structured.unwrap()["cancelled"], false);
+}
+
+#[test]
+fn vera_model_config_round_trips_and_status_follows() {
+    let mut b = Headless::demo();
+    let r = call_tool(&mut b, "vera_model", &json!({"action": "config"}));
+    assert!(!r.is_error, "{r:?}");
+    assert_eq!(r.structured.unwrap()["vectorLane"], true);
+    let r = call_tool(&mut b, "vera_model", &json!({"action": "config", "vectorLane": false}));
+    assert!(!r.is_error, "{r:?}");
+    let v = r.structured.unwrap();
+    assert_eq!(v["vectorLane"], false, "{v}");
+    // no model folder on this session: the lane is still `needs_model`, and the switch is remembered
+    let v = call_tool(&mut b, "vera_status", &json!({})).structured.unwrap();
+    assert_eq!(v["lanes"]["vector"]["state"], "needs_model", "{v}");
+    // a folder that looks like an installed model (empty files, never loaded): now the lane says it is off
+    let dir = std::env::temp_dir().join(format!("lc-mcp-model-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for f in ["model.safetensors", "config.json", "tokenizer.model"] {
+        std::fs::write(dir.join(f), b"not a model").unwrap();
+    }
+    b.session.vera_model_dir = Some(dir.clone());
+    let v = call_tool(&mut b, "vera_status", &json!({})).structured.unwrap();
+    assert_eq!((v["model"]["installed"].clone(), v["lanes"]["vector"]["state"].clone()), (json!(true), json!("disabled_by_user")), "{v}");
+    let v = call_tool(&mut b, "vera_model", &json!({})).structured.unwrap();
+    assert_eq!((v["installed"].clone(), v["state"].clone()), (json!(true), json!("disabled_by_user")), "{v}");
+    let r = call_tool(&mut b, "photo_similar", &json!({}));
+    assert!(r.is_error && r.content[0]["text"].as_str().unwrap().contains("not ready"), "{r:?}");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(call_tool(&mut b, "vera_model", &json!({"action": "config", "vectorLane": "off"})).is_error);
+    let r = call_tool(&mut b, "vera_model", &json!({"action": "config", "vectorLane": true}));
+    assert_eq!(r.structured.unwrap()["vectorLane"], true);
+}
+
+/// `remove` with nothing installed removes nothing, and says so.
+#[test]
+fn vera_model_remove_with_nothing_installed_removes_nothing() {
+    let mut b = Headless::demo();
+    let r = call_tool(&mut b, "vera_model", &json!({"action": "remove"}));
+    assert!(!r.is_error, "{r:?}");
+    let v = r.structured.unwrap();
+    assert_eq!((v["files"].clone(), v["installed"].clone()), (json!(0), json!(false)), "{v}");
+}
+
+/// An unknown or mistyped action is refused before the engine is called.
+#[test]
+fn vera_model_rejects_unknown_actions_before_the_engine() {
+    let mut rec = Recorder(vec![]);
+    for args in [json!({"action": "delete"}), json!({"action": "Status"}), json!({"action": 5}), json!({"action": ""})] {
+        let r = call_tool(&mut rec, "vera_model", &args);
+        assert!(r.is_error, "{args}: {r:?}");
+        assert!(r.content[0]["text"].as_str().unwrap().contains("action"), "{r:?}");
+    }
+    assert!(rec.0.is_empty(), "the engine was not called: {:?}", rec.0);
+    // `acceptLicense` goes to download only, `vectorLane` to config only (a recorder: nothing is fetched)
+    let r = call_tool(&mut rec, "vera_model", &json!({"action": "download", "acceptLicense": false, "vectorLane": false}));
+    assert!(!r.is_error);
+    let r = call_tool(&mut rec, "vera_model", &json!({"action": "config", "acceptLicense": false, "vectorLane": false}));
+    assert!(!r.is_error);
+    assert_eq!(
+        rec.0,
+        vec![
+            ("engine.execute".to_string(), json!({"command": "vera.model.download", "params": {"acceptLicense": false}})),
+            ("engine.execute".to_string(), json!({"command": "vera.config", "params": {"vectorLane": false}})),
+        ]
+    );
 }
