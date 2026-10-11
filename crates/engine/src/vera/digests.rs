@@ -4,7 +4,10 @@
 //! ([`crate::media::content_key`]: the file's content hash, so a virtual copy or a re-linked file shares its original's
 //! digest). The cache file (`vera-digests.bin` in the library folder) is rebuildable: a damaged one, an older format or a
 //! foreign file is ignored and written again. Digests are kept out of the catalog on purpose: they are derived, small,
-//! and the rendition they are computed from may change.
+//! and the rendition they are computed from may change. The file lives where the library's other files do
+//! ([`Sidecars`]: the library folder, or the browser's storage); new records are appended, and the file is written whole
+//! only when records were dropped (photos removed, a torn tail).
+
 //!
 //! Layout (little-endian): `"LCVD"`, format version `1`, the digest algorithm's version
 //! ([`lightcraft_vera::ALGORITHM_VERSION`]: a file made by another computation is ignored and rebuilt), then records of `key_len u16`, the key (UTF-8), `pdq [u8; 32]`,
@@ -12,10 +15,11 @@
 //! thumbnail-level luma; a change of rendition bumps it and records made from another one are dropped).
 
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use lightcraft_vera::Digest;
+
+use super::sidecar::{Loaded, Sidecars};
 
 /// The cache file's name in the library folder.
 pub(crate) const FILE_NAME: &str = "vera-digests.bin";
@@ -35,14 +39,20 @@ pub(crate) struct DigestStore {
     map: HashMap<String, Digest>,
     /// Keys whose digests are not in the file yet.
     unsaved: Vec<String>,
-    path: Option<PathBuf>,
+    files: Sidecars,
     /// The file on disk has this format's header and whole records, so new records can be appended to it.
     file_matches: bool,
 }
 
 impl DigestStore {
-    pub fn path(&self) -> Option<&Path> {
-        self.path.as_deref()
+    /// Where the cache file is kept.
+    pub fn files(&self) -> &Sidecars {
+        &self.files
+    }
+
+    /// The cache file's path, for a library on disk.
+    pub fn path(&self) -> Option<PathBuf> {
+        self.files.path_of(FILE_NAME)
     }
 
     pub fn len(&self) -> usize {
@@ -77,28 +87,28 @@ impl DigestStore {
         !self.unsaved.is_empty()
     }
 
-    /// Start over with the cache file at `path` (what was not saved yet is written to the old file first). With `live`,
-    /// records whose key is not in it (photos removed since) are dropped, and the file is rewritten without them.
-    pub fn reset(&mut self, path: Option<PathBuf>, live: Option<&HashSet<String>>) {
+    /// Start over with the cache file kept in `files` (what was not saved yet is written to the old file first). With
+    /// `live`, records whose key is not in it (photos removed since) are dropped, and the file is rewritten without them.
+    pub fn reset(&mut self, files: Sidecars, live: Option<&HashSet<String>>) {
         if let Err(e) = self.save() {
             log::warn!("vera: could not save the picture digests: {e}");
         }
         self.map.clear();
         self.unsaved.clear();
         self.file_matches = false;
-        self.path = path;
-        if let Some(p) = self.path.clone() {
-            self.load(&p, live);
-        }
+        self.files = files;
+        self.load(live);
     }
 
-    fn load(&mut self, path: &Path, live: Option<&HashSet<String>>) {
-        let Ok(meta) = std::fs::metadata(path) else { return };
-        if meta.len() > MAX_FILE {
-            log::warn!("vera: {} is too large to be a digest cache; it will be rebuilt", path.display());
-            return;
-        }
-        let Ok(bytes) = std::fs::read(path) else { return };
+    fn load(&mut self, live: Option<&HashSet<String>>) {
+        let bytes = match self.files.read(FILE_NAME, MAX_FILE) {
+            Loaded::Missing => return,
+            Loaded::TooLarge => {
+                log::warn!("vera: {} is too large to be a digest cache; it will be rebuilt", self.files.describe(FILE_NAME));
+                return;
+            }
+            Loaded::Bytes(b) => b,
+        };
         let (map, whole) = parse(&bytes);
         let Some(map) = map else { return };
         let read = map.len();
@@ -110,7 +120,7 @@ impl DigestStore {
         // torn record would misalign every record after it
         self.file_matches = whole && map.len() == read;
         if !self.file_matches {
-            log::debug!("vera: digest cache {}: {} of {read} records kept; rewriting", path.display(), map.len());
+            log::debug!("vera: digest cache {}: {} of {read} records kept; rewriting", self.files.describe(FILE_NAME), map.len());
             self.unsaved = map.keys().cloned().collect();
         }
         self.map = map;
@@ -119,10 +129,10 @@ impl DigestStore {
     /// Write what was added since the last save: appended when the file already has this format, else the whole store is
     /// written fresh (atomically). A failure is returned and the records stay pending.
     pub fn save(&mut self) -> std::io::Result<()> {
-        let Some(path) = self.path.clone() else {
+        if !self.files.persists() {
             self.unsaved.clear();
             return Ok(());
-        };
+        }
         if self.unsaved.is_empty() {
             return Ok(());
         }
@@ -133,13 +143,13 @@ impl DigestStore {
                     record(&mut buf, k, d);
                 }
             }
-            match std::fs::OpenOptions::new().append(true).open(&path).and_then(|mut f| f.write_all(&buf)) {
+            match self.files.append(FILE_NAME, &buf) {
                 Ok(()) => {
                     self.unsaved.clear();
                     return Ok(());
                 }
                 // the file went away (or cannot be appended to): write it whole
-                Err(e) => log::debug!("vera: appending to {}: {e}; rewriting", path.display()),
+                Err(e) => log::debug!("vera: appending to {}: {e}; rewriting", self.files.describe(FILE_NAME)),
             }
         }
         let mut buf = Vec::with_capacity(5 + self.map.len() * (TAIL + 34));
@@ -151,15 +161,15 @@ impl DigestStore {
                 record(&mut buf, k, d);
             }
         }
-        crate::denoise::write_atomic(&path, &buf).map_err(std::io::Error::other)?;
+        self.files.write_atomic(FILE_NAME, &buf).map_err(std::io::Error::other)?;
         self.file_matches = true;
         self.unsaved.clear();
         Ok(())
     }
 
-    /// Size of the cache file on disk, when there is one.
+    /// Size of the cache file, when there is one.
     pub fn file_len(&self) -> Option<u64> {
-        self.path.as_ref().and_then(|p| std::fs::metadata(p).ok()).map(|m| m.len())
+        self.files.len(FILE_NAME)
     }
 }
 
@@ -243,7 +253,7 @@ mod tests {
         let dir = temp_dir("roundtrip");
         let path = dir.join(FILE_NAME);
         let mut st = DigestStore::default();
-        st.reset(Some(path.clone()), None);
+        st.reset(Sidecars::Dir(dir.clone()), None);
         st.insert("aaa".into(), d(1));
         st.insert("bbb".into(), d(2));
         st.save().unwrap();
@@ -256,7 +266,7 @@ mod tests {
         assert_eq!(second - first, (2 + 3 + TAIL) as u64);
         drop(st);
         let mut again = DigestStore::default();
-        again.reset(Some(path.clone()), None);
+        again.reset(Sidecars::Dir(dir.clone()), None);
         assert_eq!(again.len(), 3);
         assert_eq!(again.get("bbb"), Some(&d(2)));
         assert_eq!(again.get("ccc"), Some(&d(3)));
@@ -272,12 +282,12 @@ mod tests {
         for bytes in [b"garbage!".to_vec(), Vec::new(), b"LCVD\x01".to_vec(), b"LCVD\x01\xff\xffab".to_vec(), b"LCVD\x02\x01\x00a".to_vec()] {
             std::fs::write(&path, &bytes).unwrap();
             let mut st = DigestStore::default();
-            st.reset(Some(path.clone()), None);
+            st.reset(Sidecars::Dir(dir.clone()), None);
             assert!(st.is_empty());
         }
         // a whole record then a torn one: the whole one is kept and the file is rewritten before anything is appended
         let mut st = DigestStore::default();
-        st.reset(Some(path.clone()), None);
+        st.reset(Sidecars::Dir(dir.clone()), None);
         st.insert("key1".into(), d(7));
         st.save().unwrap();
         drop(st);
@@ -285,14 +295,14 @@ mod tests {
         bytes.extend_from_slice(&[4, 0, b'k', b'e']);
         std::fs::write(&path, &bytes).unwrap();
         let mut st = DigestStore::default();
-        st.reset(Some(path.clone()), None);
+        st.reset(Sidecars::Dir(dir.clone()), None);
         assert_eq!(st.len(), 1);
         assert!(!st.file_matches);
         st.insert("key2".into(), d(8));
         st.save().unwrap();
         drop(st);
         let mut st = DigestStore::default();
-        st.reset(Some(path.clone()), None);
+        st.reset(Sidecars::Dir(dir.clone()), None);
         assert_eq!((st.len(), st.get("key2")), (2, Some(&d(8))));
         assert!(st.file_matches);
         let _ = std::fs::remove_dir_all(&dir);
@@ -304,7 +314,7 @@ mod tests {
         let path = dir.join(FILE_NAME);
         std::fs::write(&path, b"LCFE\x02not ours at all").unwrap();
         let mut st = DigestStore::default();
-        st.reset(Some(path.clone()), None);
+        st.reset(Sidecars::Dir(dir.clone()), None);
         assert!(st.is_empty() && !st.file_matches);
         st.insert("k".into(), d(4));
         st.save().unwrap();
@@ -312,7 +322,7 @@ mod tests {
         assert!(bytes.starts_with(&[b'L', b'C', b'V', b'D', 1, lightcraft_vera::ALGORITHM_VERSION]), "{bytes:?}");
         drop(st);
         let mut st = DigestStore::default();
-        st.reset(Some(path.clone()), None);
+        st.reset(Sidecars::Dir(dir.clone()), None);
         assert_eq!(st.get("k"), Some(&d(4)));
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -340,7 +350,7 @@ mod tests {
         let dir = temp_dir("compact");
         let path = dir.join(FILE_NAME);
         let mut st = DigestStore::default();
-        st.reset(Some(path.clone()), None);
+        st.reset(Sidecars::Dir(dir.clone()), None);
         for (k, n) in [("keep", 1), ("gone", 2), ("also", 3)] {
             st.insert(k.into(), d(n));
         }
@@ -349,7 +359,7 @@ mod tests {
         let full = std::fs::metadata(&path).unwrap().len();
         let live: HashSet<String> = ["keep".to_string(), "also".to_string()].into_iter().collect();
         let mut st = DigestStore::default();
-        st.reset(Some(path.clone()), Some(&live));
+        st.reset(Sidecars::Dir(dir.clone()), Some(&live));
         assert_eq!(st.len(), 2);
         assert!(!st.contains("gone"));
         // rewritten without the orphan on the next save
@@ -357,7 +367,7 @@ mod tests {
         assert!(std::fs::metadata(&path).unwrap().len() < full);
         drop(st);
         let mut st = DigestStore::default();
-        st.reset(Some(path.clone()), None);
+        st.reset(Sidecars::Dir(dir.clone()), None);
         assert_eq!(st.len(), 2);
         assert!(st.file_matches);
         let _ = std::fs::remove_dir_all(&dir);

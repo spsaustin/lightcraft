@@ -24,7 +24,11 @@ lane to find, only once the user accepts them.
 | **keyword** | Photos whose words match: title, keywords (every level of `travel\|Italy\|Rome`), caption, alt text, extended description, file name, camera, lens and place | **live** |
 | **digest** | The same picture under other bytes: a resize, a re-export, a format change | **live** |
 | **vector** | Photos by meaning ("a dog on a beach"), look-alikes (`photo.similar`), and crops the digests cannot catch | **live** on the desktop once the user downloads SigLIP 2 (Phase 2); `needs_desktop` on the web |
-| **describe** | Words written for photos that have none, so the keyword lane can find them: a title, caption, alt text and keywords proposed by an endpoint the user configures and by zero-shot keywords from SigLIP 2, each reviewed before it is kept | **live** on the desktop once an endpoint is configured (Phase 3); keywords alone with the vector lane's model; `disabled` on the web |
+| **describe** | Words written for photos that have none, so the keyword lane can find them: a title, caption, alt text and keywords proposed by an endpoint the user configures and by zero-shot keywords from SigLIP 2, each reviewed before it is kept | **live** on the desktop once an endpoint is configured (Phase 3); keywords alone with the vector lane's model; `needs_desktop` on the web (Phase 4) |
+
+On the web (Phase 4) the keyword and digest lanes run in the browser as they do on the desktop, and their files persist
+in the browser's storage; the vector and describe lanes say `needs_desktop`, with a sentence saying why (see *The web
+build* below).
 
 `vera.status` reports these on every build, with a sentence for each lane that is not running, so nothing claims a lane
 it does not have.
@@ -64,7 +68,9 @@ Every photo in the library (videos aside) is fingerprinted once, in the backgrou
 every frame. Each call is cheap: it digests at most a few pictures and returns.
 
 - **Pace.** The app says how hard it may work, as for the face scan: `pause` does nothing but report (dragging, typing,
-  scrolling); `light` digests one picture per call; `normal` two; `full` four.
+  scrolling); `light` digests one picture per call; `normal` two; `full` four. In the browser the decode runs on the
+  main thread, so a call also stops starting pictures once it has worked 8 ms (`WEB_STEP_BUDGET`; the first picture of
+  a call always runs).
 - **Newest photos first**, so a fresh import is covered soonest. The catalog is looked through again for new photos at
   most once a second, and only once the current list is done.
 - **Unreadable pictures** (an offline original with no smart preview, a file that will not decode) are remembered for
@@ -270,12 +276,13 @@ The vector lane's `state` is one of:
 | `needs_model` | No model in the model folder (or no folder at all); the reason says where the files go and how to download them |
 | `downloading` | The download is running (the reason gives the percentage) |
 | `disabled_by_user` | Switched off with `vera.config` |
-| `needs_desktop` | The web build |
+| `needs_desktop` | The web build: "Searching by meaning needs the desktop app for now: the browser cannot run the model" |
 | `error` | The model failed to load or to run; the reason carries the message |
 
 with a sentence in `reason` for each. `vera.status` also counts `embedded`, `pendingEmbeddings`, `unembeddable` and
 `embeddings` (pictures in the space), reports `model: {id, installed, loaded, memoryBytes}`, and lists both sidecar
-files in `sidecars` (`[{name, path?, bytes?}]`; `sidecar` still names the digest file alone).
+files in `sidecars` (`[{name, path?, bytes?}]`, with `store` instead of `path` when the files are in the library's store,
+as in the browser; `sidecar` still names the digest file alone, by path, on disk).
 
 ## The describe lane (Phase 3)
 
@@ -445,8 +452,33 @@ pictures that also match its words. Search and duplicates keep using the canonic
 | `live` | An endpoint, a model name and (for a non-loopback host) a token are set and allowed |
 | `needs_endpoint` | No endpoint, or no model name; keywords alone still work (`keywordsOnly`) |
 | `needs_token` | A non-loopback endpoint without a token |
-| `disabled` | The web build |
+| `needs_desktop` | The web build: the endpoint is reached through the desktop's HTTP client, which the browser build does not have, and keyword proposals need the search model |
 | `error` | The token file is readable by others, the saved endpoint breaks the policy, or the endpoint refused the token |
+
+## The web build (Phase 4)
+
+The browser build (`apps/lightcraft-web`, [web.md](web.md)) runs the same engine, so the keyword and digest lanes work
+there unchanged: `search.text`, `photo.duplicates`, `photo.ignorePair`, `vera.digest` and the import check.
+
+- **Where the files go.** A browser library is not a folder: its catalog, `prefs.json` and `view.json` live in the
+  library's file store (OPFS, or IndexedDB), behind the host's memory mirror (`apps/lightcraft-web/src/files.rs`) that
+  flushes changes a frame later. VERA's files go through the same store (`Sidecars`, `vera/sidecar.rs`), as
+  `library/vera-digests.bin`, `library/vera-ignored.json` and so on, so a reload finds every fingerprint and the pump
+  has nothing to do. The host reads every `vera-*` file in the library folder at start-up, and **File ▸ Back Up
+  Library…** includes them (a restore puts them back).
+- **Appends stay appends.** New fingerprints are appended to the store (`Store::append`); the mirror flushes only the
+  new bytes, at the stored file's length. The file is written whole only when records were dropped (photos removed, a
+  torn tail), once, when the library opens. On the desktop nothing changed: the same names, formats, appends to the
+  open file and atomic rewrites through a `.part` file, in the library folder.
+- **Frames first.** The pump decodes on the main thread there (no threads in this build), so each call stops starting
+  pictures after 8 ms of work (the pace's count still applies). One decode is not split: a picture that takes longer
+  holds its frame for that long, but never two of them. Measured in headless Chrome on a `cargo xtask web --dev` build
+  (unoptimised, so slow): the demo library's 24 pictures in about 40 s, 0.7–4 s a picture; after a reload, 24 of 24
+  digested with nothing pending. A worker for fingerprinting (an open question below) is what would free the frames.
+- **What says `needs_desktop`.** The vector lane ("Searching by meaning needs the desktop app for now: the browser cannot
+  run the model") and the describe lane (the endpoint is reached through the native HTTP client; keyword proposals need
+  the same model). `search.text` then ranks by the keyword lane alone, and `photo.duplicates` has no `similar` tier.
+  `vera.model.download` and `vera.describe.config` refuse with the same sentences.
 
 ## In the app and over MCP
 
@@ -462,6 +494,27 @@ pictures that also match its words. Search and duplicates keep using the canonic
   `vera {pending, digested, pace}`.
 - **MCP:** helper tools `search_text`, `photo_duplicates` and `vera_status`, and `import.onNearDuplicate`; everything
   else through `run_command` (see [mcp.md](mcp.md)).
+
+- **Search by meaning in the app:** Settings ▸ Search shows the four lanes with their state and a sentence, the
+  fingerprinted / embedded counts, and the SigLIP 2 model: "Download the model (1.5 GB)" opens its terms (the
+  Apache-2.0 notice from `vera.model.status`, links to the model card and the licence, an "I accept" box that gates the
+  button); then progress and Cancel; once installed, the "Search by meaning" switch (`vera.config {vectorLane}`), its
+  size and Remove. Photo ▸ Find Photos That Look Alike (`photo.showLookAlikes`, also on the grid's context menu) runs
+  `photo.similar` under a "Looks like <file>" chip; when the lane is not ready a toast says why with an "Open
+  Settings → Search" button. With the vector lane live the Ranked chip reads "by words and meaning".
+- **Describe in the app:** Settings ▸ Search ▸ Describe sets the endpoint, its model name and a write-only token
+  ("Token set · Replace / Clear"; never painted). For a host that is not this computer it asks consent first, in the
+  PRD's words ("Preview-sized copies of the frames you choose will be sent to this address. LightCraft does not operate
+  it."), which is what `allowRemoteHost` stands for. Photo ▸ Describe Photos… (`photo.describeSelected`, also on the
+  grid's context menu) and Photo ▸ Suggest Keywords (`photo.keywordsSelected`, keywords only, no endpoint) queue the
+  selection. Window ▸ Review Descriptions (`view.reviewDescriptions`; also from the activity row's "N to review" link
+  and the toast at the end of a run) shows one proposal at a time: thumbnail, "Proposed by <model> at <host>", each
+  field beside the photo's own value, editable and ticked to keep. Accept (Return) runs `describe.accept`, Reject (⌫)
+  `describe.reject`, Skip (→) moves on, Reject All… runs `describe.clear` after a confirmation. A field whose
+  provenance is `describe` shows an "AI" tag in Info naming the model on hover; typing over it makes it `user`.
+- **MCP, Phases 2–3:** `photo_similar`, `vera_model` (status, download with `acceptLicense`, cancel, remove, config),
+  `vera_describe_config` (the token is scrubbed from every result and error), `photo_describe`, `describe_review`
+  (list, accept, reject, clear), `photo_keywords`; see [mcp.md](mcp.md).
 
 ## Commands
 
@@ -499,7 +552,10 @@ like any other key.
 
 ## Files beside the library
 
-All are rebuildable or small, and all live in the library folder; an in-memory library keeps them for the session only.
+All are rebuildable or small. They live where the library's own settings files (`prefs.json`, `view.json`) do
+(`crates/engine/src/vera/sidecar.rs`): in the library folder for a library on disk (desktop, CLI, MCP; through `std::fs`,
+as before), in the library's file store otherwise (the browser: OPFS or IndexedDB, see [web.md](web.md)); a session
+without a library keeps them in memory only.
 
 - **`vera-digests.bin`**: the fingerprints. Little-endian: `"LCVD"`, version `1`, then records of `key_len u16`, the
   content key (UTF-8), `pdq [u8; 32]`, `pdq_quality u8`, `phash u64`, `source u8`. `source` names what the fingerprint
@@ -538,9 +594,9 @@ The phases of the PRD this work follows, each gated on a measured proof rather t
 | Phase | What | State |
 |---|---|---|
 | 1 | Keyword lane ranked (`search.text`, relevance sort); digest lane: background fingerprints, `photo.duplicates`, ignored pairs, stacking; the import's same-picture check | done: engine, app and MCP (below) |
-| 2 | Vector lane: SigLIP 2 Base patch32-256 as an opt-in download (`crates/embed`, the choice in [vera-models.md](vera-models.md)), vectors beside the library, the noise cutoff and rank fusion with the keyword lane, `photo.similar`, crops found as duplicates | engine done (this page); Gate 2 measured and the thresholds set; UI and MCP surfaces following |
-| 3 | Describe: words proposed for photos that have none, reviewed before anything is kept ([vera-describe.md](vera-describe.md)): the remote OpenAI-compatible path with its consent and token, zero-shot keywords from SigLIP 2 with per-keyword calibration, the review queue, provenance, contextual and fused vectors; a local captioner (Florence-2) next | engine done for the remote path and the keywords (this page); keywords measured on the demo library (recall@10 0.59); UI and MCP surfaces following; the Florence-2 port is the next PR |
-| 4 | The web build: keyword and digest lanes in the browser; the vector lane reports `needs_desktop` until a browser-runnable model is proven | planned |
+| 2 | Vector lane: SigLIP 2 Base patch32-256 as an opt-in download (`crates/embed`, the choice in [vera-models.md](vera-models.md)), vectors beside the library, the noise cutoff and rank fusion with the keyword lane, `photo.similar`, crops found as duplicates | engine, app and MCP done; Gate 2 measured and the thresholds set |
+| 3 | Describe: words proposed for photos that have none, reviewed before anything is kept ([vera-describe.md](vera-describe.md)): the remote OpenAI-compatible path with its consent and token, zero-shot keywords from SigLIP 2 with per-keyword calibration, the review queue, provenance, contextual and fused vectors; a local captioner (Florence-2) next | engine, app and MCP done (remote path, zero-shot keywords, review); Florence-2 captions next |
+| 4 | The web build: keyword and digest lanes in the browser, their files in the browser's storage; the vector and describe lanes report `needs_desktop` until a browser-runnable model (and an HTTP path) is proven | done: engine and web host (*The web build*, below) |
 
 ## Open questions
 

@@ -14,7 +14,6 @@
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use std::collections::{BTreeMap, VecDeque};
-use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use lightcraft_catalog::PhotoId;
@@ -22,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use web_time::Instant;
 
+use super::sidecar::{Loaded, Sidecars};
 use crate::cmd::{CommandSpec, always, bad, cmd};
 use crate::media::content_key;
 use crate::{Result, Session};
@@ -110,19 +110,18 @@ struct QueueFile {
 #[derive(Default)]
 pub(crate) struct Review {
     proposals: BTreeMap<u64, Proposal>,
-    path: Option<PathBuf>,
+    files: Sidecars,
     dirty: bool,
     saved_at: Option<Instant>,
 }
 
 impl Review {
-    /// The proposals in the file at `path` whose photo is in `live` (none when it is missing, too large or not ours).
-    pub fn load(path: Option<PathBuf>, live: &std::collections::HashSet<u64>) -> Review {
+    /// The proposals in the file kept in `files` whose photo is in `live` (none when it is missing, too large or not
+    /// ours).
+    pub fn load(files: Sidecars, live: &std::collections::HashSet<u64>) -> Review {
         let mut proposals = BTreeMap::new();
         let mut dropped = false;
-        if let Some(p) = &path
-            && let Some(bytes) = crate::denoise::read_capped(p, MAX_FILE)
-        {
+        if let Loaded::Bytes(bytes) = files.read(FILE_NAME, MAX_FILE as u64) {
             match serde_json::from_slice::<QueueFile>(&bytes) {
                 Ok(f) => {
                     for pr in f.proposals {
@@ -133,14 +132,15 @@ impl Review {
                         }
                     }
                 }
-                Err(e) => log::warn!("vera: {} is unreadable ({e}); starting with no proposals", p.display()),
+                Err(e) => log::warn!("vera: {} is unreadable ({e}); starting with no proposals", files.describe(FILE_NAME)),
             }
         }
-        Review { proposals, path, dirty: dropped, saved_at: None }
+        Review { proposals, files, dirty: dropped, saved_at: None }
     }
 
-    pub fn path(&self) -> Option<&Path> {
-        self.path.as_deref()
+    /// Where the file is kept.
+    pub fn files(&self) -> &Sidecars {
+        &self.files
     }
 
     pub fn len(&self) -> usize {
@@ -178,21 +178,21 @@ impl Review {
         n
     }
 
-    /// Write the queue (atomically) when it changed; an in-memory library keeps it for the session.
+    /// Write the queue (atomically) when it changed; without a library it is kept for the session.
     pub fn save(&mut self) -> std::result::Result<(), String> {
         if !self.dirty {
             return Ok(());
         }
-        let Some(path) = &self.path else {
+        if !self.files.persists() {
             self.dirty = false;
             return Ok(());
-        };
+        }
         let file = QueueFile { version: 1, proposals: self.proposals.values().cloned().collect() };
         let bytes = serde_json::to_vec(&file).map_err(|e| e.to_string())?;
         if bytes.len() > MAX_FILE {
             return Err(format!("the review queue is larger than {} MiB", MAX_FILE >> 20));
         }
-        crate::denoise::write_atomic(path, &bytes)?;
+        self.files.write_atomic(FILE_NAME, &bytes)?;
         self.dirty = false;
         self.saved_at = Some(Instant::now());
         Ok(())

@@ -22,7 +22,7 @@ use lightcraft_catalog::PhotoId;
 use serde_json::{Value, json};
 use web_time::Instant;
 
-use super::embeddings::{self, EmbeddingStore};
+use super::embeddings::EmbeddingStore;
 use super::{Pace, eligible};
 use crate::Session;
 use crate::activity::{Cancel, TaskGuard};
@@ -218,7 +218,7 @@ impl LaneState {
             LaneState::DisabledByUser => {
                 "Finding photos by meaning is switched off for this library (vera.config {\"vectorLane\": true} switches it on).".into()
             }
-            LaneState::NeedsDesktop => "Finding photos by meaning runs in the desktop app: the browser build has no model for it yet.".into(),
+            LaneState::NeedsDesktop => "Searching by meaning needs the desktop app for now: the browser cannot run the model".into(),
             LaneState::Error(e) => format!("The SigLIP 2 model could not be used: {e}"),
         }
     }
@@ -260,11 +260,11 @@ pub(crate) fn state(s: &Session) -> LaneState {
     LaneState::Live
 }
 
-/// Open the embeddings of the library in `dir` (dropping records of pictures no longer in its catalog, `live`).
-pub(crate) fn open_store(s: &mut Session, dir: Option<&std::path::Path>, live: &HashSet<String>) {
-    let path = dir.map(|d| d.join(embeddings::file_name(MODEL_ID)));
-    if s.vera.lane.store.path() != path.as_deref() {
-        s.vera.lane.store.reset(path, Some(live));
+/// Open the embeddings of the library whose files are in `files` (dropping records of pictures no longer in its
+/// catalog, `live`).
+pub(crate) fn open_store(s: &mut Session, files: &super::sidecar::Sidecars, live: &HashSet<String>) {
+    if !s.vera.lane.store.files().same_place(files) {
+        s.vera.lane.store.reset(files.clone(), Some(live));
         s.vera.lane.skipped.clear();
         s.vera.lane.requeue();
     }

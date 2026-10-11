@@ -118,9 +118,9 @@ pub(crate) enum DescribeState {
     NeedsToken {
         host: String,
     },
-    /// The web build.
+    /// The web build: the remote path needs the native HTTP client, and the keyword proposals the model.
     #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-    Disabled,
+    NeedsDesktop,
     Error(String),
 }
 
@@ -130,7 +130,7 @@ impl DescribeState {
             DescribeState::Live { .. } => "live",
             DescribeState::NeedsEndpoint(_) => "needs_endpoint",
             DescribeState::NeedsToken { .. } => "needs_token",
-            DescribeState::Disabled => "disabled",
+            DescribeState::NeedsDesktop => "needs_desktop",
             DescribeState::Error(_) => "error",
         }
     }
@@ -148,7 +148,7 @@ impl DescribeState {
             DescribeState::NeedsEndpoint(false) => "Describing photos in words needs an OpenAI-compatible endpoint (llama.cpp, Ollama, vLLM or LM Studio on this computer): set one with vera.describe.config {endpoint, model}. Keyword proposals from the search model work without one (photo.describe {keywordsOnly: true}).".into(),
             DescribeState::NeedsEndpoint(true) => "Describing photos needs the endpoint's model name too: vera.describe.config {model}.".into(),
             DescribeState::NeedsToken { host } => format!("The endpoint at {host} is another computer and needs an access token: vera.describe.config {{token}}."),
-            DescribeState::Disabled => "Describing photos runs in the desktop app; the browser build has no endpoint for it.".into(),
+            DescribeState::NeedsDesktop => "Describing photos needs the desktop app for now: the endpoint is reached through the desktop's HTTP client, which the browser build does not have, and keyword proposals need the search model the browser cannot run".into(),
             DescribeState::Error(e) => format!("Describing photos cannot run: {e}"),
         }
     }
@@ -175,7 +175,7 @@ fn remote(s: &Session) -> std::result::Result<super::remote::Remote, DescribeSta
 
 pub(crate) fn state(s: &Session) -> DescribeState {
     #[cfg(target_arch = "wasm32")]
-    return DescribeState::Disabled;
+    return DescribeState::NeedsDesktop;
     #[cfg(not(target_arch = "wasm32"))]
     match remote(s) {
         Ok(r) => DescribeState::Live { host: r.host.clone() },
@@ -242,7 +242,7 @@ fn config(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "vera.describe.config";
     #[cfg(target_arch = "wasm32")]
     {
-        return Err(bad(C, DescribeState::Disabled.reason()));
+        return Err(bad(C, DescribeState::NeedsDesktop.reason()));
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -311,7 +311,7 @@ fn describe(s: &mut Session, p: &Value) -> Result<Value> {
     #[cfg(target_arch = "wasm32")]
     {
         let _ = (ids, keywords_only);
-        return Err(bad(C, DescribeState::Disabled.reason()));
+        return Err(bad(C, DescribeState::NeedsDesktop.reason()));
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -584,12 +584,12 @@ fn keywords(s: &mut Session, p: &Value) -> Result<Value> {
     super::keywords::photo_keywords(s, p)
 }
 
-/// Open the review queue of the library in `dir` (dropping proposals of photos no longer in the catalog).
-pub(crate) fn open(s: &mut Session, dir: Option<&std::path::Path>) {
-    let path = dir.map(|d| d.join(review::FILE_NAME));
-    if s.vera.describe.review.path() != path.as_deref() {
+/// Open the review queue of the library whose files are in `files` (dropping proposals of photos no longer in the
+/// catalog).
+pub(crate) fn open(s: &mut Session, files: &super::sidecar::Sidecars) {
+    if !s.vera.describe.review.files().same_place(files) {
         let live: HashSet<u64> = s.catalog.photos().map(|p| p.id.0).collect();
-        s.vera.describe.review = Review::load(path, &live);
+        s.vera.describe.review = Review::load(files.clone(), &live);
     }
 }
 

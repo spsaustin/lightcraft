@@ -3,6 +3,8 @@
 //! The algorithms live in `lightcraft-vera` (pure functions, no I/O); this module decides what to digest and when, where
 //! the results are kept and how the commands see them (`docs/vera.md`):
 //! - [`digests`]: one PDQ + pHash digest per picture, keyed by content, cached in `vera-digests.bin` beside the library.
+//! - [`sidecar`]: where that file and the others below live: the library folder on disk, or the library's own file
+//!   store (the browser's storage); memory only without a library.
 //! - The keyword index, built from the catalog when a search needs it and rebuilt when the catalog has changed since.
 //! - [`IgnoredPairs`]: pictures the user said are *not* the same (`vera-ignored.json` beside the library). A user
 //!   decision kept outside the op log for now: it is not undoable and does not travel with a catalog export.
@@ -25,12 +27,13 @@ pub(crate) mod model;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod remote;
 pub(crate) mod review;
+pub(crate) mod sidecar;
 pub(crate) mod vocabulary;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod worker;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -44,6 +47,7 @@ use crate::Session;
 use crate::activity::{Cancel, TaskGuard};
 use crate::import::{ImportCandidate, NearDuplicate};
 use crate::media::{SourceLevel, content_key};
+use sidecar::{Loaded, Sidecars};
 
 /// The user's "not the same picture" decisions, in the library folder.
 pub(crate) const IGNORED_FILE: &str = "vera-ignored.json";
@@ -61,6 +65,39 @@ const REQUEUE_EVERY: Duration = Duration::from_secs(1);
 pub(crate) const MAX_IMPORT_CHECKS: usize = 2000;
 /// Candidate digests remembered between reviews (by path and size).
 const MAX_CANDIDATE_CACHE: usize = 20_000;
+/// On the web the pump's digest step decodes on the main thread (no threads there): it stops starting pictures once it
+/// has worked this long in one call, so a few large raws never stall a frame (a decode already started still finishes).
+pub(crate) const WEB_STEP_BUDGET: Duration = Duration::from_millis(8);
+
+/// The digest step's time budget per call: [`WEB_STEP_BUDGET`] in the browser, none on the desktop (the pace's
+/// picture count alone bounds it there).
+pub(crate) fn step_budget() -> Option<Duration> {
+    cfg!(target_arch = "wasm32").then_some(WEB_STEP_BUDGET)
+}
+
+/// How much of one call's digest step is used: pictures started, and the time since the step began.
+pub(crate) struct Step {
+    started: Instant,
+    tried: usize,
+    per_call: usize,
+    budget: Option<Duration>,
+}
+
+impl Step {
+    pub fn new(per_call: usize, budget: Option<Duration>, started: Instant) -> Step {
+        Step { started, tried: 0, per_call, budget }
+    }
+
+    /// Whether another picture may be started at `now`: under the pace's count, and within the time budget. The first
+    /// picture always may (a budget bounds the work after it, not whether there is any).
+    pub fn may_start(&self, now: Instant) -> bool {
+        self.tried < self.per_call && (self.tried == 0 || self.budget.is_none_or(|b| now.saturating_duration_since(self.started) < b))
+    }
+
+    pub fn started_one(&mut self) {
+        self.tried += 1;
+    }
+}
 
 /// The keyword lane's fields, in the order [`fields`] gives them, and their weights: title, keywords, caption, alt
 /// text, extended description, file stem, camera + lens + place.
@@ -137,8 +174,8 @@ pub(crate) struct State {
     pub ignored: IgnoredPairs,
     /// Photos without a digest yet, as of the last look (what a paused pump reports).
     pub pending_known: usize,
-    /// The library folder the sidecar files were opened for (`Some(None)`: an in-memory library).
-    opened: Option<Option<PathBuf>>,
+    /// Where the sidecar files were opened from (`None`: not yet for this library).
+    opened: Option<Sidecars>,
     /// Pictures whose source could not be read this session (not retried every frame).
     pub skipped: HashSet<String>,
     /// The pump's work, taken from the end.
@@ -173,39 +210,33 @@ pub(crate) fn eligible(p: &Photo) -> bool {
     p.in_library() && p.kind != MediaKind::Video
 }
 
-pub(crate) fn library_dir(s: &Session) -> Option<PathBuf> {
-    s.library.as_ref().filter(|l| l.on_disk).map(|l| l.dir.clone())
-}
-
 /// Open the sidecar files of the library in use, once per library: the digests (dropping records of photos no longer
-/// in the catalog) and the ignored pairs.
+/// in the catalog), the embeddings, the ignored pairs and the review queue, from the library folder or the library's
+/// file store ([`sidecar::of`]).
 pub(crate) fn ensure_open(s: &mut Session) {
-    let dir = library_dir(s);
-    if s.vera.opened.as_ref() == Some(&dir) {
+    let files = sidecar::of(s);
+    if s.vera.opened.as_ref().is_some_and(|o| o.same_place(&files)) {
         return;
     }
-    let digests_path = dir.as_ref().map(|d| d.join(digests::FILE_NAME));
-    let embeddings_path = dir.as_ref().map(|d| d.join(embeddings::file_name(lane::MODEL_ID)));
-    let digests_moved = s.vera.digests.path() != digests_path.as_deref();
-    let embeddings_moved = s.vera.lane.store.path() != embeddings_path.as_deref();
+    let digests_moved = !s.vera.digests.files().same_place(&files);
+    let embeddings_moved = !s.vera.lane.store.files().same_place(&files);
     if digests_moved || embeddings_moved {
         let live: HashSet<String> = s.catalog.photos().map(|p| content_key(p)).collect();
         if digests_moved {
-            s.vera.digests.reset(digests_path, Some(&live));
+            s.vera.digests.reset(files.clone(), Some(&live));
             s.vera.skipped.clear();
             s.vera.queue.clear();
             s.vera.queue_stamp = None;
         }
         if embeddings_moved {
-            lane::open_store(s, dir.as_deref(), &live);
+            lane::open_store(s, &files, &live);
         }
     }
-    let ignored_path = dir.as_ref().map(|d| d.join(IGNORED_FILE));
-    if s.vera.ignored.path() != ignored_path.as_deref() {
-        s.vera.ignored = IgnoredPairs::load(ignored_path);
+    if !s.vera.ignored.files().same_place(&files) {
+        s.vera.ignored = IgnoredPairs::load(files.clone());
     }
-    describe::open(s, dir.as_deref());
-    s.vera.opened = Some(dir);
+    describe::open(s, &files);
+    s.vera.opened = Some(files);
 }
 
 /// Both digests of a decoded picture, from its Rec. 601 luma; `None` for a picture too small to fingerprint.
@@ -305,8 +336,8 @@ pub(crate) fn pump(s: &mut Session, pace: Pace) -> Value {
         if s.vera.queue.is_empty() && stale && s.vera.queued_at.is_none_or(|t| t.elapsed() >= REQUEUE_EVERY) {
             refresh_queue(s);
         }
-        let mut tried = 0;
-        while tried < per_call {
+        let mut step = Step::new(per_call, step_budget(), Instant::now());
+        while step.may_start(Instant::now()) {
             let Some(next) = s.vera.queue.pop() else { break };
             s.vera.pending_known = s.vera.pending_known.saturating_sub(next.ids.len());
             // digested since the look (`vera.digest`, `photo.duplicates`), or failed: nothing to do
@@ -317,7 +348,7 @@ pub(crate) fn pump(s: &mut Session, pace: Pace) -> Value {
             if s.vera.skipped.contains(&next.key) {
                 continue;
             }
-            tried += 1;
+            step.started_one();
             let mut done = None;
             for id in &next.ids {
                 match digest_photo(s, *id) {
@@ -511,7 +542,7 @@ pub(crate) fn remember_candidates(s: &mut Session, fresh: Vec<((String, u64), Di
 #[derive(Clone, Default)]
 pub(crate) struct IgnoredPairs {
     set: BTreeSet<(String, String)>,
-    path: Option<PathBuf>,
+    files: Sidecars,
 }
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
@@ -530,26 +561,25 @@ fn valid_key(k: &str) -> bool {
 }
 
 impl IgnoredPairs {
-    /// The pairs in the file at `path` (none when it is missing, too large or not ours).
-    pub fn load(path: Option<PathBuf>) -> IgnoredPairs {
+    /// The pairs in the file kept in `files` (none when it is missing, too large or not ours).
+    pub fn load(files: Sidecars) -> IgnoredPairs {
         let mut set = BTreeSet::new();
-        if let Some(p) = &path
-            && let Some(bytes) = crate::denoise::read_capped(p, MAX_IGNORED_FILE)
-        {
+        if let Loaded::Bytes(bytes) = files.read(IGNORED_FILE, MAX_IGNORED_FILE as u64) {
             match serde_json::from_slice::<IgnoredFile>(&bytes) {
                 Ok(f) => {
                     for (a, b) in f.pairs.iter().filter(|(a, b)| valid_key(a) && valid_key(b)).take(MAX_IGNORED) {
                         set.insert(ordered(a, b));
                     }
                 }
-                Err(e) => log::warn!("vera: {} is unreadable ({e}); starting without ignored pairs", p.display()),
+                Err(e) => log::warn!("vera: {} is unreadable ({e}); starting without ignored pairs", files.describe(IGNORED_FILE)),
             }
         }
-        IgnoredPairs { set, path }
+        IgnoredPairs { set, files }
     }
 
-    pub fn path(&self) -> Option<&Path> {
-        self.path.as_deref()
+    /// Where the file is kept.
+    pub fn files(&self) -> &Sidecars {
+        &self.files
     }
 
     pub fn len(&self) -> usize {
@@ -576,12 +606,15 @@ impl IgnoredPairs {
         self.set.remove(&ordered(a, b))
     }
 
-    /// Write the pairs (atomically) beside the library; an in-memory library keeps them for the session.
+    /// Write the pairs (atomically) beside the library, or into its file store; without a library they are kept for the
+    /// session.
     pub fn save(&self) -> Result<(), String> {
-        let Some(path) = &self.path else { return Ok(()) };
+        if !self.files.persists() {
+            return Ok(());
+        }
         let file = IgnoredFile { version: 1, pairs: self.set.iter().cloned().collect() };
         let bytes = serde_json::to_vec_pretty(&file).map_err(|e| e.to_string())?;
-        crate::denoise::write_atomic(path, &bytes)
+        self.files.write_atomic(IGNORED_FILE, &bytes)
     }
 }
 
@@ -591,3 +624,5 @@ mod tests;
 mod tests_describe;
 #[cfg(test)]
 mod tests_lane;
+#[cfg(test)]
+mod tests_sidecar;

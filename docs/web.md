@@ -148,6 +148,15 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
 - **Export downloads the file.** *Export…* (<kbd>⌘⇧E</kbd>) runs the same `app.export` path as
   the desktop app (`lightcraft_engine::export`: JPEG/PNG/TIFF/WebP, sizing, naming). The host's
   `write` service hands each file to the browser as a download instead of writing it to disk.
+- **Search and duplicates (VERA, [vera.md](vera.md) → *The web build*).** The keyword and digest lanes run in the
+  browser: `search.text` ranks by words, and every photo is fingerprinted in the background (`vera.pump`, called every
+  frame) for `photo.duplicates`, `photo.ignorePair` and the import check. The fingerprinting decodes on the main thread,
+  so each frame's share stops after 8 ms of work. Its files live with the library's others, in the same storage:
+  `library/vera-digests.bin` (new fingerprints are flushed as appends, not rewrites), `library/vera-ignored.json` and,
+  from a desktop-style library, any other `vera-*` file; the host reads them at start-up, so a reload doesn't fingerprint
+  again, and backups include them. Searching by meaning (the vector lane) and Describe report `needs_desktop` in
+  `vera.status`, each with a sentence saying why: the browser can't run the model, and Describe's endpoint needs the
+  desktop's HTTP client.
 - **Automation.** `await lightcraft.command("library.info", "{}")` runs any engine or UI command
   by id on the next frame and resolves to the JSON result (`web.stats` reports storage, workers
   and the render queue). This is how the headless-Chrome checks drive the page.
@@ -157,6 +166,10 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
 - **Exports and auto-adjustments run on the main thread** (they need the original's pixels
   there). Right after a reload, the first such command on a photo whose original isn't in memory
   yet fails with "still loading" and works a moment later.
+- **Searching by meaning and Describe** need the desktop app (`needs_desktop`): no browser-runnable model has been
+  proven yet, and the remote endpoint goes through the desktop's HTTP client. An append to OPFS still goes through a
+  writable that keeps the existing data, which some browsers copy whole; fine for the fingerprints (about 80 bytes a
+  photo), not for a future embedding file.
 - **Durability is "a frame later", not fsync-before-return:** a crash or tab kill in the few
   milliseconds between a command and its flush loses that command.
 - **Data-safety gaps still open** (issue #107): a panic in a decoder still ends the page (and a

@@ -68,11 +68,16 @@ pub(crate) fn targets_param(s: &Session, p: &Value, c: &str) -> Result<Vec<Photo
     }
 }
 
-/// One sidecar file for `vera.status`: its name, and where it is and how large when the library is on disk.
-fn sidecar_json(name: &str, path: Option<&std::path::Path>, bytes: Option<u64>) -> Value {
-    match path {
-        Some(path) => json!({"name": name, "path": path.to_string_lossy(), "bytes": bytes.unwrap_or(0)}),
-        None => json!({"name": name}),
+/// One sidecar file for `vera.status`: its name, and where it is and how large: its path when the library is on disk,
+/// the store holding it otherwise (the browser's storage); the name alone without a library.
+fn sidecar_json(name: &str, files: &super::sidecar::Sidecars, bytes: Option<u64>) -> Value {
+    use super::sidecar::Sidecars;
+    match files {
+        Sidecars::Dir(_) => {
+            json!({"name": name, "path": files.path_of(name).map(|p| p.to_string_lossy().to_string()), "bytes": bytes.unwrap_or(0)})
+        }
+        Sidecars::Store(_) => json!({"name": name, "store": files.describe(name), "bytes": bytes.unwrap_or(0)}),
+        Sidecars::Memory => json!({"name": name}),
     }
 }
 
@@ -95,8 +100,8 @@ fn status(s: &mut Session, _: &Value) -> Result<Value> {
     };
     let embeddings_name = super::embeddings::file_name(lane::MODEL_ID);
     let sidecars = json!([
-        sidecar_json(super::digests::FILE_NAME, s.vera.digests.path(), s.vera.digests.file_len()),
-        sidecar_json(&embeddings_name, s.vera.lane.store.path(), s.vera.lane.store.file_len()),
+        sidecar_json(super::digests::FILE_NAME, s.vera.digests.files(), s.vera.digests.file_len()),
+        sidecar_json(&embeddings_name, s.vera.lane.store.files(), s.vera.lane.store.file_len()),
     ]);
     let (_, embedded, pending_embeddings) = lane::counts(s);
     let vector = lane::state(s);
@@ -525,7 +530,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Search Status",
             [],
             None,
-            "{} → {digested, photos, pendingDigests, unreadable, digests, embedded, pendingEmbeddings, unembeddable, embeddings, model: {id, installed, loaded, memoryBytes}, indexDocs, ignoredPairs, lanes: {keyword: \"live\", digest: \"live\", vector: {state: live | needs_model | downloading | disabled_by_user | needs_desktop | error, reason}, describe: {state: live | needs_endpoint | needs_token | disabled | error, reason, host?, pending, proposals}}, sidecar: {path?, bytes?}, sidecars: [{name, path?, bytes?}]} — how far fingerprinting and embedding have got, and which search lanes this build runs (with a sentence for each)",
+            "{} → {digested, photos, pendingDigests, unreadable, digests, embedded, pendingEmbeddings, unembeddable, embeddings, model: {id, installed, loaded, memoryBytes}, indexDocs, ignoredPairs, lanes: {keyword: \"live\", digest: \"live\", vector: {state: live | needs_model | downloading | disabled_by_user | needs_desktop | error, reason}, describe: {state: live | needs_endpoint | needs_token | needs_desktop | error, reason, host?, pending, proposals}}, sidecar: {path?, bytes?}, sidecars: [{name, path? | store?, bytes?}]} — how far fingerprinting and embedding have got, and which search lanes this build runs (with a sentence for each)",
             always,
             status
         ),

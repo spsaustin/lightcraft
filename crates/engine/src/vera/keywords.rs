@@ -23,13 +23,13 @@
 // the web build has no model to build the matrix with
 #![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_variables, unused_mut))]
 
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use lightcraft_vera::cutoff::{self, Background, mix64};
 use lightcraft_vera::thresholds;
 use serde_json::{Value, json};
 
+use super::sidecar::{Loaded, Sidecars};
 use super::vocabulary::{Mode, Vocabulary};
 use crate::Session;
 
@@ -381,8 +381,8 @@ pub(crate) fn score(vocab: &Vocabulary, matrix: &Matrix, calibration: Option<&Ca
 pub(crate) struct KeywordState {
     pub vocab: Arc<Vocabulary>,
     pub matrix: Option<Arc<Matrix>>,
-    /// The library folder the matrix was last written to.
-    saved_in: Option<PathBuf>,
+    /// Where the matrix was last written (the library folder, or its file store).
+    saved_in: Option<Sidecars>,
     pub calibration: Option<Arc<Calibration>>,
     /// A matrix being built off the session thread (`vera.pump`'s describe work).
     #[cfg(not(target_arch = "wasm32"))]
@@ -425,9 +425,9 @@ impl KeywordState {
     }
 }
 
-/// The matrix file in library folder `dir`.
-fn matrix_path(dir: &Path, vocab: &Vocabulary) -> PathBuf {
-    dir.join(file_name(super::lane::MODEL_ID, vocab.hash()))
+/// The matrix file's name for `vocab`.
+fn matrix_name(vocab: &Vocabulary) -> String {
+    file_name(super::lane::MODEL_ID, vocab.hash())
 }
 
 /// Keep `m` and write it beside the library (once per library folder).
@@ -437,19 +437,19 @@ fn adopt(s: &mut Session, m: Arc<Matrix>) {
 }
 
 fn save_matrix(s: &mut Session) {
-    let dir = super::library_dir(s);
+    let files = super::sidecar::of(s);
     let k = &mut s.vera.describe.keywords;
-    let (Some(dir), Some(m)) = (dir, &k.matrix) else { return };
-    if k.saved_in.as_ref() == Some(&dir) {
+    let Some(m) = &k.matrix else { return };
+    if !files.persists() || k.saved_in.as_ref().is_some_and(|w| w.same_place(&files)) {
         return;
     }
-    let path = matrix_path(&dir, &k.vocab);
-    if !path.is_file()
-        && let Err(e) = crate::denoise::write_atomic(&path, &m.to_bytes())
+    let name = matrix_name(&k.vocab);
+    if !files.exists(&name)
+        && let Err(e) = files.write_atomic(&name, &m.to_bytes())
     {
         log::warn!("vera: could not save the keyword vectors: {e}");
     }
-    k.saved_in = Some(dir);
+    k.saved_in = Some(files);
 }
 
 /// The vocabulary's matrix: in memory, else from the library's file, else built with the model's text tower on a thread
@@ -485,21 +485,17 @@ pub(crate) fn matrix(s: &mut Session) -> Result<Option<Arc<Matrix>>, String> {
             Err(std::sync::mpsc::TryRecvError::Disconnected) => s.vera.describe.keywords.building = None,
         }
     }
-    if let Some(dir) = super::library_dir(s) {
-        let path = matrix_path(&dir, &vocab);
-        if let Ok(meta) = std::fs::metadata(&path)
-            && meta.len() <= MAX_FILE
-            && let Ok(bytes) = std::fs::read(&path)
-        {
-            match Matrix::from_bytes(&bytes, super::lane::MODEL_ID, &vocab, lightcraft_embed::DIM) {
-                Some(m) => {
-                    let m = Arc::new(m);
-                    s.vera.describe.keywords.matrix = Some(m.clone());
-                    s.vera.describe.keywords.saved_in = Some(dir);
-                    return Ok(Some(m));
-                }
-                None => log::debug!("vera: {} is not this vocabulary's keyword cache; it will be rebuilt", path.display()),
+    let files = super::sidecar::of(s);
+    let name = matrix_name(&vocab);
+    if let Loaded::Bytes(bytes) = files.read(&name, MAX_FILE) {
+        match Matrix::from_bytes(&bytes, super::lane::MODEL_ID, &vocab, lightcraft_embed::DIM) {
+            Some(m) => {
+                let m = Arc::new(m);
+                s.vera.describe.keywords.matrix = Some(m.clone());
+                s.vera.describe.keywords.saved_in = Some(files);
+                return Ok(Some(m));
             }
+            None => log::debug!("vera: {} is not this vocabulary's keyword cache; it will be rebuilt", files.describe(&name)),
         }
     }
     #[cfg(not(target_arch = "wasm32"))]

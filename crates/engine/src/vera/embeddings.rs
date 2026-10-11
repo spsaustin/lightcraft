@@ -5,7 +5,9 @@
 //! ([`crate::media::content_key`], like the digests: a virtual copy shares its original's vector). The space itself is
 //! keyed by a `u64` derived from the content key ([`key_id`]); this store keeps the maps both ways. The cache file
 //! (`vera-embeddings-<model id>.bin` in the library folder) is rebuildable: a damaged one, another format, another
-//! model or another dimension is ignored and written again.
+//! model or another dimension is ignored and written again. It lives where the library's other files do ([`Sidecars`]:
+//! the library folder, or the browser's storage); new records are appended (on the web too: only the new bytes are
+//! flushed), and the file is written whole only when records were dropped.
 //!
 //! Layout (little-endian): `"LCVE"`, format version `1`, the model id (`u16` length + UTF-8), `dim u32`, then records
 //! of `key_len u16`, the content key (UTF-8), `role u8` and `dim × f32`. Roles: [`ROLE_CANONICAL`] (`0`, the picture
@@ -14,11 +16,12 @@
 //! sum of the two, which `photo.similar` prefers). The last two are kept beside the space, not in it.
 
 use std::collections::{HashMap, HashSet};
-use std::io::{BufReader, BufWriter, Read, Write};
-use std::path::{Path, PathBuf};
+use std::io::{Read, Write};
 
 use lightcraft_vera::Space;
 use lightcraft_vera::cutoff::Background;
+
+use super::sidecar::{Opened, Sidecars};
 
 const MAGIC: &[u8; 4] = b"LCVE";
 const VERSION: u8 = 1;
@@ -57,7 +60,7 @@ pub(crate) struct EmbeddingStore {
     extra: HashMap<(String, u8), Vec<f32>>,
     /// Keys (and roles) whose vectors are not in the file yet.
     unsaved: Vec<(String, u8)>,
-    path: Option<PathBuf>,
+    files: Sidecars,
     /// The file on disk has this format's header and whole records, so new records can be appended to it.
     file_matches: bool,
     /// The space's background cosine statistics, sampled on first use and again once stale.
@@ -75,14 +78,20 @@ impl EmbeddingStore {
             ids: HashMap::new(),
             extra: HashMap::new(),
             unsaved: Vec::new(),
-            path: None,
+            files: Sidecars::Memory,
             file_matches: false,
             background: None,
         }
     }
 
-    pub fn path(&self) -> Option<&Path> {
-        self.path.as_deref()
+    /// Where the cache file is kept.
+    pub fn files(&self) -> &Sidecars {
+        &self.files
+    }
+
+    /// The cache file's name.
+    fn name(&self) -> String {
+        file_name(&self.model_id)
     }
 
     pub fn len(&self) -> usize {
@@ -185,17 +194,15 @@ impl EmbeddingStore {
         self.background
     }
 
-    /// Start over with the cache file at `path` (what was not saved yet is written to the old file first). With `live`,
-    /// records whose key is not in it (photos removed since) are dropped, and the file is rewritten without them.
-    pub fn reset(&mut self, path: Option<PathBuf>, live: Option<&HashSet<String>>) {
+    /// Start over with the cache file kept in `files` (what was not saved yet is written to the old file first). With
+    /// `live`, records whose key is not in it (photos removed since) are dropped, and the file is rewritten without them.
+    pub fn reset(&mut self, files: Sidecars, live: Option<&HashSet<String>>) {
         if let Err(e) = self.save() {
             log::warn!("vera: could not save the picture embeddings: {e}");
         }
         self.clear();
-        self.path = path;
-        if let Some(p) = self.path.clone() {
-            self.load(&p, live);
-        }
+        self.files = files;
+        self.load(live);
     }
 
     fn clear(&mut self) {
@@ -211,24 +218,21 @@ impl EmbeddingStore {
     /// Forget every vector and delete the cache file (`vera.model.remove`). `Ok(true)` when there was a file.
     pub fn delete_file(&mut self) -> std::io::Result<bool> {
         self.clear();
-        let Some(path) = &self.path else { return Ok(false) };
-        match std::fs::remove_file(path) {
-            Ok(()) => Ok(true),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
-            Err(e) => Err(e),
-        }
+        self.files.remove(&self.name())
     }
 
-    fn load(&mut self, path: &Path, live: Option<&HashSet<String>>) {
-        let Ok(meta) = std::fs::metadata(path) else { return };
-        if meta.len() > MAX_FILE {
-            log::warn!("vera: {} is too large to be an embedding cache; it will be rebuilt", path.display());
-            return;
-        }
-        let Ok(file) = std::fs::File::open(path) else { return };
-        let mut reader = BufReader::new(file);
+    fn load(&mut self, live: Option<&HashSet<String>>) {
+        let name = self.name();
+        let mut reader = match self.files.open(&name, MAX_FILE) {
+            Opened::Missing => return,
+            Opened::TooLarge => {
+                log::warn!("vera: {} is too large to be an embedding cache; it will be rebuilt", self.files.describe(&name));
+                return;
+            }
+            Opened::Reader(r) => r,
+        };
         let Some(parsed) = parse(&mut reader, &self.model_id, self.dim) else {
-            log::debug!("vera: {} is not an embedding cache of {} at {}; it will be rebuilt", path.display(), self.model_id, self.dim);
+            log::debug!("vera: {} is not an embedding cache of {} at {}; it will be rebuilt", self.files.describe(&name), self.model_id, self.dim);
             return;
         };
         let read = parsed.records.len();
@@ -254,7 +258,7 @@ impl EmbeddingStore {
         if self.file_matches {
             self.unsaved.clear();
         } else {
-            log::debug!("vera: embedding cache {}: {kept} of {read} records kept; rewriting", path.display());
+            log::debug!("vera: embedding cache {}: {kept} of {read} records kept; rewriting", self.files.describe(&name));
             self.unsaved = self.ids.keys().map(|k| (k.clone(), ROLE_CANONICAL)).chain(self.extra.keys().cloned()).collect();
         }
     }
@@ -262,13 +266,14 @@ impl EmbeddingStore {
     /// Write what was added since the last save: appended when the file already has this format, else the whole store is
     /// written fresh (atomically). A failure is returned and the records stay pending.
     pub fn save(&mut self) -> std::io::Result<()> {
-        let Some(path) = self.path.clone() else {
+        if !self.files.persists() {
             self.unsaved.clear();
             return Ok(());
-        };
+        }
         if self.unsaved.is_empty() {
             return Ok(());
         }
+        let name = self.name();
         if self.file_matches {
             let mut buf = Vec::new();
             for (k, role) in &self.unsaved {
@@ -276,26 +281,25 @@ impl EmbeddingStore {
                     record(&mut buf, k, *role, v);
                 }
             }
-            match std::fs::OpenOptions::new().append(true).open(&path).and_then(|mut f| f.write_all(&buf)) {
+            match self.files.append(&name, &buf) {
                 Ok(()) => {
                     self.unsaved.clear();
                     return Ok(());
                 }
                 // the file went away (or cannot be appended to): write it whole
-                Err(e) => log::debug!("vera: appending to {}: {e}; rewriting", path.display()),
+                Err(e) => log::debug!("vera: appending to {}: {e}; rewriting", self.files.describe(&name)),
             }
         }
-        self.write_whole(&path)?;
+        self.write_whole(&name)?;
         self.file_matches = true;
         self.unsaved.clear();
         Ok(())
     }
 
-    /// The whole store, written next to `path` and renamed over it (so a failed write never leaves half a file).
-    fn write_whole(&self, path: &Path) -> std::io::Result<()> {
-        let part = path.with_extension("bin.part");
-        {
-            let mut w = BufWriter::new(std::fs::File::create(&part)?);
+    /// The whole store, written atomically (on disk: next to the file and renamed over it, so a failed write never
+    /// leaves half a file).
+    fn write_whole(&self, name: &str) -> std::io::Result<()> {
+        self.files.write_streamed(name, "bin.part", &mut |w: &mut dyn Write| {
             w.write_all(&header(&self.model_id, self.dim))?;
             let mut buf = Vec::new();
             if let Some(space) = &self.space {
@@ -313,17 +317,13 @@ impl EmbeddingStore {
                 record(&mut buf, k, *role, v);
                 w.write_all(&buf)?;
             }
-            w.flush()?;
-            w.get_ref().sync_all()?;
-        }
-        std::fs::rename(&part, path).inspect_err(|_| {
-            let _ = std::fs::remove_file(&part);
+            Ok(())
         })
     }
 
-    /// Size of the cache file on disk, when there is one.
+    /// Size of the cache file, when there is one.
     pub fn file_len(&self) -> Option<u64> {
-        self.path.as_ref().and_then(|p| std::fs::metadata(p).ok()).map(|m| m.len())
+        self.files.len(&self.name())
     }
 }
 
@@ -443,6 +443,7 @@ fn parse(r: &mut impl Read, model_id: &str, dim: usize) -> Option<Parsed> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::{Path, PathBuf};
 
     const DIM: usize = 8;
     const MODEL: &str = "test-model";
@@ -460,7 +461,7 @@ mod tests {
 
     fn store(path: &Path) -> EmbeddingStore {
         let mut st = EmbeddingStore::new(MODEL, DIM);
-        st.reset(Some(path.to_path_buf()), None);
+        st.reset(Sidecars::Dir(path.parent().unwrap().to_path_buf()), None);
         st
     }
 
@@ -579,7 +580,7 @@ mod tests {
         let full = std::fs::metadata(&path).unwrap().len();
         let live: HashSet<String> = ["keep".to_string(), "also".to_string()].into_iter().collect();
         let mut st = EmbeddingStore::new(MODEL, DIM);
-        st.reset(Some(path.clone()), Some(&live));
+        st.reset(Sidecars::Dir(dir.clone()), Some(&live));
         assert_eq!(st.len(), 2);
         assert!(!st.contains("gone"));
         st.save().unwrap();
@@ -616,7 +617,7 @@ mod tests {
         drop(st);
         // compaction drops them with their picture
         let mut st = EmbeddingStore::new(MODEL, DIM);
-        st.reset(Some(path.clone()), Some(&HashSet::new()));
+        st.reset(Sidecars::Dir(dir.clone()), Some(&HashSet::new()));
         assert_eq!((st.len(), st.role_count(ROLE_CONTEXTUAL)), (0, 0));
         drop(st);
         let _ = std::fs::remove_dir_all(&dir);

@@ -660,7 +660,7 @@ fn describe_tools_are_listed_with_schemas_and_hints() {
         assert!(d.contains(needle), "vera_describe_config lacks {needle}");
     }
     let d = tool("vera_status")["description"].as_str().unwrap();
-    for needle in ["needs_endpoint", "needs_token", "disabled", "host"] {
+    for needle in ["needs_endpoint", "needs_token", "needs_desktop", "host"] {
         assert!(d.contains(needle), "vera_status lacks {needle}");
     }
     for (name, args) in [

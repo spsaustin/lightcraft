@@ -49,8 +49,9 @@ pub struct Library {
     /// cached in `thumbs/`.
     pub on_disk: bool,
     journal: Journal,
-    /// presets.json, view.json, prefs.json.
-    files: Box<dyn Store>,
+    /// presets.json, view.json, prefs.json; shared with VERA's sidecar files when the library is not on disk
+    /// ([`crate::vera::sidecar`]: the browser keeps them in the same storage).
+    files: crate::vera::sidecar::SharedStore,
     /// What happened when the catalog was loaded.
     pub report: LoadReport,
     /// Last persistence error (shown by the UI; ops stay pending and are retried).
@@ -123,6 +124,14 @@ impl Library {
     }
     pub fn originals_dir(&self) -> PathBuf {
         self.dir.join("Originals")
+    }
+    /// The store holding presets.json, view.json and prefs.json (VERA keeps its sidecars there too when the library is
+    /// not a directory).
+    pub(crate) fn shared_files(&self) -> crate::vera::sidecar::SharedStore {
+        self.files.clone()
+    }
+    fn files(&self) -> std::sync::MutexGuard<'_, Box<dyn Store>> {
+        self.files.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 
@@ -401,7 +410,7 @@ impl Session {
             dir,
             on_disk,
             journal,
-            files,
+            files: std::sync::Arc::new(std::sync::Mutex::new(files)),
             report,
             last_error: None,
             unsaved_error: None,
@@ -472,7 +481,7 @@ impl Session {
         let presets = presets_json(self);
         let Some(lib) = self.library.as_mut() else { return Ok(()) };
         if presets != lib.presets_written && !lib.blocked.contains(&"presets.json") {
-            if let Err(e) = lib.files.write_atomic("presets.json", presets.as_bytes()) {
+            if let Err(e) = lib.files().write_atomic("presets.json", presets.as_bytes()) {
                 log::error!("library: presets: {e}");
             } else {
                 lib.presets_written = presets;
@@ -566,7 +575,8 @@ impl Session {
         let v = self.view_json();
         let Some(lib) = self.library.as_mut() else { return };
         if v != lib.view_written && !lib.blocked.contains(&"view.json") {
-            match lib.files.write_atomic("view.json", &v) {
+            let written = lib.files().write_atomic("view.json", &v);
+            match written {
                 Ok(()) => lib.view_written = v,
                 Err(e) => log::error!("library: view: {e}"),
             }
@@ -600,7 +610,7 @@ impl Session {
                 "prefs: prefs.json couldn't be read when the library opened, so it isn't overwritten; reopen the library to save preferences".into(),
             ));
         }
-        lib.files.write_atomic("prefs.json", &v).map_err(|e| EngineError::Other(format!("prefs: {e}")))
+        lib.files().write_atomic("prefs.json", &v).map_err(|e| EngineError::Other(format!("prefs: {e}")))
     }
 
     /// Warnings about the open library not handed out yet: its settings files, and a lock that
