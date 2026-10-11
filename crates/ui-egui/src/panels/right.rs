@@ -584,7 +584,7 @@ fn info(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
             ("Extended Description", "extendedDescription", &m.extended_description, 3),
             ("Copyright", "copyright", &m.copyright, 1),
         ] {
-            meta_field(app, ui, label, key, value, lines);
+            meta_field(app, ui, &m.provenance, label, key, value, lines);
         }
         copyright_status(app, ui, m.copyright_status);
         for (label, key, value, lines) in [
@@ -592,7 +592,7 @@ fn info(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
             ("Copyright Info URL", "copyrightUrl", &m.copyright_url, 1),
             ("Creator", "creator", &m.creator, 1),
         ] {
-            meta_field(app, ui, label, key, value, lines);
+            meta_field(app, ui, &m.provenance, label, key, value, lines);
         }
         // file: name (rename), path (reveal), capture time (edit)
         let small = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(crate::i18n::tr(text)).size(11.5).color(t.text_dim));
@@ -641,7 +641,7 @@ fn info(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
             ("State / Province", "state", &m.state),
             ("Country", "country", &m.country),
         ] {
-            meta_field(app, ui, label, key, value, 1);
+            meta_field(app, ui, &m.provenance, label, key, value, 1);
         }
         // GPS: typed as "lat, lon" (or degrees / minutes / seconds); empty clears it
         let gps = m.gps.map(|(la, lo)| format!("{la:.6}, {lo:.6}")).unwrap_or_default();
@@ -784,9 +784,29 @@ fn copyright_status(app: &mut LightcraftApp, ui: &mut egui::Ui, current: lightcr
     ui.add_space(6.0);
 }
 
-fn meta_field(app: &mut LightcraftApp, ui: &mut egui::Ui, label: &str, key: &str, value: &str, lines: usize) {
+fn meta_field(
+    app: &mut LightcraftApp,
+    ui: &mut egui::Ui,
+    provenance: &std::collections::BTreeMap<String, lightcraft_catalog::Provenance>,
+    label: &str,
+    key: &str,
+    value: &str,
+    lines: usize,
+) {
     let t = Tokens::get(ui.ctx());
-    ui.label(egui::RichText::new(crate::i18n::tr(label)).size(11.5).color(t.text_dim));
+    // where the value came from (`Meta::provenance`, keyed by the catalog's field name): Describe's are marked "AI"
+    let prov_key = provenance_field(key);
+    let origin = prov_key.and_then(|f| provenance.get(f).cloned());
+    let caption = egui::RichText::new(crate::i18n::tr(label)).size(11.5).color(t.text_dim);
+    if matches!(origin, Some(lightcraft_catalog::Provenance::Describe { .. })) {
+        ui.horizontal(|ui| {
+            ui.label(caption);
+            super::describe_review::ai_tag(ui, &t, key, origin.as_ref());
+        });
+    } else {
+        // (a plain label: the row of the tag is taller, and the panel keeps its layout without one)
+        ui.label(caption);
+    }
     let id = egui::Id::new(("info-field", key));
     let mut text: String = ui.data(|d| d.get_temp(id)).unwrap_or_else(|| value.to_string());
     let widget = format!("field:{key}");
@@ -804,9 +824,25 @@ fn meta_field(app: &mut LightcraftApp, ui: &mut egui::Ui, label: &str, key: &str
     }
     // Return (one line) or leaving saves; Esc gives the edit up
     if r.committed() && text != value {
-        let _ = app.run("photo.setMeta", json!({key: text}));
+        let mut p = json!({key: text});
+        // typed over what Describe wrote: the words are the user's now
+        if let (Some(f), Some(lightcraft_catalog::Provenance::Describe { .. })) = (prov_key, &origin) {
+            p["provenance"] = json!({f: {"kind": "user"}});
+        }
+        let _ = app.run("photo.setMeta", p);
     }
     ui.add_space(6.0);
+}
+
+/// The `Meta::provenance` key of the Info panel's field `key` (its `photo.setMeta` name), for the fields that have one.
+fn provenance_field(key: &str) -> Option<&'static str> {
+    match key {
+        "title" => Some("title"),
+        "caption" => Some("caption"),
+        "altText" => Some("alt_text"),
+        "extendedDescription" => Some("extended_description"),
+        _ => None,
+    }
 }
 
 fn keywords(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
@@ -816,7 +852,15 @@ fn keywords(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
     }
     header(ui, "Keywords");
     let t = Tokens::get(ui.ctx());
+    let origin = app.session.catalog.photo(id).and_then(|p| p.meta.provenance.get("keywords").cloned());
     padded(ui, |ui| {
+        // keywords Describe proposed and the user accepted
+        if matches!(origin, Some(lightcraft_catalog::Provenance::Describe { .. })) {
+            ui.horizontal(|ui| {
+                super::describe_review::ai_tag(ui, &t, "keywords", origin.as_ref());
+                ui.label(egui::RichText::new(crate::i18n::tr("Some keywords were proposed by Describe")).size(11.0).color(t.text_dim));
+            });
+        }
         let kid = egui::Id::new("kw-input");
         let mut text = ui.data_mut(|d| d.get_temp::<String>(kid).unwrap_or_default());
         let r =

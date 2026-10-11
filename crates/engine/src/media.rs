@@ -1349,6 +1349,9 @@ pub struct ProbeInfo {
     /// A raw variant that can't be decoded yet: why. The file is described (and will be shown and
     /// edited) from its embedded preview; see [`lightcraft_catalog::Photo::preview_only`].
     pub preview_only: Option<String>,
+    /// The import review found the file to be the same (or possibly the same) picture as a library photo (VERA's
+    /// digests): carried to the import, which acts on it ([`crate::import::ImportOptions::on_near_duplicate`]).
+    pub near_duplicate: Option<crate::import::NearDuplicate>,
 }
 
 pub type FileProbe = Arc<dyn Fn(&str) -> Result<ProbeInfo, String> + Send + Sync>;

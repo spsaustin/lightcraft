@@ -1,0 +1,71 @@
+{
+  "registry": "ver-conformance-corpus/1.0.1 illustrative space registry",
+  "description": "Published space descriptors used by the --spaces immutability check (VER402). The openclip entry is the authoritative form of the descriptor that invalid/ver402-space-registry-conflict.json silently re-mints.",
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.openclip-vit-l14-datacomp-xl/1.0",
+      "kind": "visual",
+      "model": {
+        "family": "openclip",
+        "architecture": "ViT-L/14",
+        "checkpoint": "datacomp_xl_s13b_b90k",
+        "weights_sha256": "808c5c3d755c7eee2f168b8432b5601067cd9467d759bd2ebe1f72265920a6a1"
+      },
+      "dim": 768,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_224",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_224",
+        "mean": [
+          0.48145466,
+          0.4578275,
+          0.40821073
+        ],
+        "std": [
+          0.26862954,
+          0.26130258,
+          0.27577711
+        ],
+        "channel_order": "rgb"
+      },
+      "reference": {
+        "set_uri": "https://verstandard.org/refsets/openclip-vit-l14-datacomp-xl-1.0",
+        "tolerance_cosine": 0.999
+      },
+      "provenance": {
+        "publisher": "verstandard.org",
+        "published_at": "2026-06-01T00:00:00Z",
+        "license": "MIT"
+      }
+    },
+    {
+      "space_id": "org.verstandard.space.minilm-l6-v2/1.0",
+      "kind": "text",
+      "model": {
+        "family": "sentence-transformers",
+        "architecture": "MiniLM-L6",
+        "checkpoint": "all-MiniLM-L6-v2",
+        "weights_sha256": "06ecad8d35617e69f1858cd2ec4d83c28facb36bee1ea3769253c5a19d0f5312"
+      },
+      "dim": 384,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "tokenizer": "bert-base-uncased-wordpiece",
+        "tokenizer_sha256": "5ffe4020660c769f31f9db24323875cfecb277e7da3058f0cb900dc0b6d439c7",
+        "max_length": 256,
+        "truncation": "tail",
+        "casing": "lower"
+      },
+      "reference": {
+        "set_uri": "https://verstandard.org/refsets/minilm-l6-v2-1.0",
+        "tolerance_cosine": 0.999
+      }
+    }
+  ]
+}

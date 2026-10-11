@@ -1,0 +1,18 @@
+[package]
+name = "lightcraft-vera"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "LightCraft VERA (L2): keyword index, perceptual digests, rank fusion and the noise cutoff behind find / same / similar — pure algorithms over slices, no I/O"
+
+[lints]
+workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+lightcraft-scenes = { workspace = true }
+lightcraft-raster = { workspace = true }
+proptest = { workspace = true }
+image = { workspace = true }
+serde_json = { workspace = true }

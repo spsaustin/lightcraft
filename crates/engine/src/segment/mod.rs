@@ -15,8 +15,8 @@
 //! commands return at once and [`Session::segment_poll`] applies the results; without it (CLI,
 //! MCP, tests) they wait for the worker.
 
-#[cfg(feature = "sam")]
-mod download;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) mod download;
 #[cfg(feature = "sam")]
 mod worker;
 

@@ -1,0 +1,103 @@
+{
+  "ver_version": "1.1",
+  "cpnp_version": "1.0",
+  "record_id": "a4de2e74-be31-54fa-9f35-7cc49ba13580",
+  "created_at": "2026-08-25T10:00:00Z",
+  "generator": {
+    "name": "ver-conformance-corpus",
+    "version": "1.1-draft"
+  },
+  "conformance_level": "L0",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "28bb029008724d28f106124a1c25d927dd8d446618db82d0f7f0f6ad6d27fde0"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "862bfc4b58ac667153065a5415bcf80331f5bb3dacc48a7766c655aa5b3de38d",
+      "width": 8,
+      "height": 6
+    }
+  },
+  "image": {
+    "format": "png",
+    "width": 8,
+    "height": 6,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "kind": "visual",
+      "model": {
+        "family": "corpus-vision",
+        "architecture": "ViT-Tiny/4",
+        "checkpoint": "corpus-visual-v1",
+        "weights_sha256": "0dfcf4dea153bcdd0b54278d172169c714913c5e71a5896f923359a247f02afb"
+      },
+      "dim": 4,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_4",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_4",
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "channel_order": "rgb"
+      },
+      "reference": {
+        "set_uri": "https://refsets.example.org/corpus-visual-1.1",
+        "set_manifest_sha256": "58d6aed1be8e7c8eb56139e007ea3ded1c6f5a675ba50ea86ec75ed5f5835bbe",
+        "tolerance_cosine": 0.999
+      }
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "dim": 4,
+      "dtype": "fp32",
+      "vector": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "produced_at": "2026-08-25T09:00:03Z",
+      "producer": "ver-conformance-corpus/1.1-draft"
+    }
+  ],
+  "metadata": {
+    "raw": [
+      {
+        "segment": "xmp",
+        "index": 0,
+        "bytes": "PD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz48eDp4bXBtZXRhIHhtbG5zOng9ImFkb2JlOm5zOm1ldGEvIj48cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPjxyZGY6RGVzY3JpcHRpb24geG1sbnM6ZGM9Imh0dHA6Ly9wdXJsLm9yZy9kYy9lbGVtZW50cy8xLjEvIiB4bWxuczp4bXBOb3RlPSJodHRwOi8vbnMuYWRvYmUuY29tL3htcC9ub3RlLyIgeG1wTm90ZTpIYXNFeHRlbmRlZFhNUD0iQzBSUDA1QzBSUDA1QzBSUDA1QzBSUDA1QzBSUDA1RkYiPjxkYzpkZXNjcmlwdGlvbj5BbiBlaWdodCBieSBzaXggY29uZm9ybWFuY2Ugc3dhdGNoLjwvZGM6ZGVzY3JpcHRpb24+PC9yZGY6RGVzY3JpcHRpb24+PC9yZGY6UkRGPjwveDp4bXBtZXRhPjw/eHBhY2tldCBlbmQ9InciPz4=",
+        "sha256": "235c65f1ae9eda03f0fe2dd1bc1e826fe317c12fea2855278258773c86a18ba2",
+        "consumed_by_cpnp": false
+      },
+      {
+        "segment": "xmp",
+        "index": 0,
+        "bytes": "aHR0cDovL25zLmFkb2JlLmNvbS94bXAvZXh0ZW5zaW9uLwBDMFJQMDVDMFJQMDVDMFJQMDVDMFJQMDVDMFJQMDVGRjw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+PHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyI+PHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj48cmRmOkRlc2NyaXB0aW9uIHhtbG5zOnZlcj0iaHR0cHM6Ly92ZXJzdGFuZGFyZC5vcmcvbnMvZXhhbXBsZS8iPjx2ZXI6bm90ZT5FeHRlbmRlZCBwYWNrZXQgY29udGludWF0aW9uLCBzZWNvbmQgQVBQMSBtYXJrZXIuPC92ZXI6bm90ZT48L3JkZjpEZXNjcmlwdGlvbj48L3JkZjpSREY+PC94OnhtcG1ldGE+PD94cGFja2V0IGVuZD0idyI/Pg==",
+        "sha256": "db839dcfb382de1e817b575b3d38d9e1932e1c6999a8fba1cc0df44f3405d3fc",
+        "consumed_by_cpnp": false
+      }
+    ]
+  }
+}

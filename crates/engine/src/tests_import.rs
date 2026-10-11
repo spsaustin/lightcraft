@@ -1387,3 +1387,88 @@ fn heic_imports_as_a_normal_photo_or_says_why_not() {
     assert!(mean(&brighter.bytes) > mean(&plain.bytes) * 1.3, "exposure +1 brightens the HEIC");
     let _ = std::fs::remove_dir_all(&src);
 }
+
+/// PRD C5: a file whose fingerprint matches a library photo's (a resize, a re-export: other bytes, the same picture) is
+/// flagged by the review, left out with `onNearDuplicate: "skip"`, and stacked under the library photo by default (in
+/// the import's one undo step). The digests are injected, so this does not depend on the digest algorithm.
+#[test]
+fn import_near_duplicate_is_flagged_skipped_or_stacked() {
+    let lib_src = temp_dir("near-lib");
+    let new_src = temp_dir("near-new");
+    write_png(&lib_src.join("original.png"), 1);
+    write_png(&new_src.join("resized.png"), 2);
+    let mut s = Session::new().with_fs();
+    // without any fingerprints in the library nothing is checked
+    let r = s.execute("library.importPreview", &json!({"paths": [new_src.to_string_lossy()]})).unwrap();
+    assert!(r["candidates"][0].get("nearDuplicate").is_none(), "{r}");
+    s.execute("library.import", &json!({"paths": [lib_src.to_string_lossy()]})).unwrap();
+    let original = s.catalog.photos().next().unwrap().id;
+    let same = lightcraft_vera::Digest { pdq: [0x5A; 32], pdq_quality: 90, phash: 0xDEAD_BEEF_0000_FFFF };
+    let key = crate::media::content_key(s.catalog.photo(original).unwrap());
+    s.vera.digests.insert(key, same);
+    let candidate = new_src.join("resized.png").to_string_lossy().to_string();
+    let size = std::fs::metadata(&candidate).unwrap().len();
+    s.vera.candidates.insert((candidate.clone(), size), same);
+
+    let r = s.execute("library.importPreview", &json!({"paths": [new_src.to_string_lossy()]})).unwrap();
+    assert_eq!(r["candidates"][0]["path"], candidate.as_str(), "{r}");
+    assert_eq!(r["candidates"][0]["duplicate"], Value::Null, "different bytes: {r}");
+    assert_eq!(r["candidates"][0]["nearDuplicate"], json!({"existing": original.0, "tier": "picture", "pdq": 0, "phash": 0}), "{r}");
+
+    // skip: left out, reported as the same picture
+    let r = s.execute("library.import", &json!({"paths": [new_src.to_string_lossy()], "onNearDuplicate": "skip"})).unwrap();
+    assert_eq!(ids(&r, "imported"), 0, "{r}");
+    assert_eq!(r["duplicates"][0]["reason"], "picture", "{r}");
+    assert_eq!(r["duplicates"][0]["existing"], original.0, "{r}");
+    assert_eq!(s.catalog.len(), 1);
+
+    // stack (the default): imported under the original, one undo step for both
+    s.execute("library.importPreview", &json!({"paths": [new_src.to_string_lossy()]})).unwrap();
+    let undo0 = s.undo.len();
+    let r = s.execute("library.import", &json!({"paths": [new_src.to_string_lossy()]})).unwrap();
+    assert_eq!(ids(&r, "imported"), 1, "{r}");
+    let new = lightcraft_catalog::PhotoId(r["imported"][0].as_u64().unwrap());
+    assert_eq!(r["stacked"], json!([{"photo": new.0, "under": original.0}]), "{r}");
+    let st = s.catalog.stack_of(original).unwrap();
+    assert_eq!(st.photos, vec![original, new]);
+    assert_eq!(s.undo.len(), undo0 + 1, "the import and its stack are one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.catalog.len(), 1);
+    assert!(s.catalog.stack_of(original).is_none());
+
+    // import: like any other file
+    s.execute("library.importPreview", &json!({"paths": [new_src.to_string_lossy()]})).unwrap();
+    let r = s.execute("library.import", &json!({"paths": [new_src.to_string_lossy()], "onNearDuplicate": "import"})).unwrap();
+    assert_eq!(ids(&r, "imported"), 1, "{r}");
+    assert!(r.get("stacked").is_none(), "{r}");
+    assert!(s.catalog.stack_of(original).is_none());
+    assert!(s.execute("library.import", &json!({"paths": [new_src.to_string_lossy()], "onNearDuplicate": "merge"})).is_err());
+    let _ = std::fs::remove_dir_all(&lib_src);
+    let _ = std::fs::remove_dir_all(&new_src);
+}
+
+/// A file changed since the review (another size) is not treated as the match the review found.
+#[test]
+fn import_near_duplicate_match_is_dropped_when_the_file_changed() {
+    let lib_src = temp_dir("near-changed-lib");
+    let new_src = temp_dir("near-changed-new");
+    write_png(&lib_src.join("original.png"), 3);
+    write_png(&new_src.join("copy.png"), 4);
+    let mut s = Session::new().with_fs();
+    s.execute("library.import", &json!({"paths": [lib_src.to_string_lossy()]})).unwrap();
+    let original = s.catalog.photos().next().unwrap().id;
+    let same = lightcraft_vera::Digest { pdq: [0x11; 32], pdq_quality: 90, phash: 42 };
+    s.vera.digests.insert(crate::media::content_key(s.catalog.photo(original).unwrap()), same);
+    let candidate = new_src.join("copy.png").to_string_lossy().to_string();
+    s.vera.candidates.insert((candidate.clone(), std::fs::metadata(&candidate).unwrap().len()), same);
+    let r = s.execute("library.importPreview", &json!({"paths": [new_src.to_string_lossy()]})).unwrap();
+    assert_eq!(r["candidates"][0]["nearDuplicate"]["tier"], "picture", "{r}");
+    // the file is replaced by a larger one before the import
+    let mut bytes = std::fs::read(&candidate).unwrap();
+    bytes.extend_from_slice(&[0; 64]);
+    std::fs::write(&candidate, bytes).unwrap();
+    let r = s.execute("library.import", &json!({"paths": [new_src.to_string_lossy()], "onNearDuplicate": "skip"})).unwrap();
+    assert_eq!(ids(&r, "imported"), 1, "{r}");
+    let _ = std::fs::remove_dir_all(&lib_src);
+    let _ = std::fs::remove_dir_all(&new_src);
+}

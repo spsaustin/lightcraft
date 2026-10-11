@@ -1,0 +1,444 @@
+{
+  "ver_version": "1.1",
+  "cpnp_version": "1.0",
+  "record_id": "3ad2cc9d-d6c8-513b-a8de-acba6153d976",
+  "created_at": "2026-08-23T09:14:07Z",
+  "generator": {
+    "name": "ver-studio",
+    "version": "1.1.0-draft.2"
+  },
+  "conformance_level": "L3",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "6f9902b45f5f277b6bb3a19604e008c7964234259b4f747611e0dca5c2d27cb7"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "9f8fb2dd72cfdce8cae02bec4ca3883bb61a59672d478cafa56687c909d899b9",
+      "width": 128,
+      "height": 48
+    },
+    "perceptual": [
+      {
+        "alg": "phash-dct/64",
+        "value": "a61964b34c4db96e"
+      }
+    ]
+  },
+  "image": {
+    "format": "png",
+    "width": 128,
+    "height": 48,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false,
+    "source_bytes_ref": {
+      "uri": "https://assets.example.org/blobs/6f9902b45f5f277b6bb3a19604e008c7964234259b4f747611e0dca5c2d27cb7",
+      "sha256": "6f9902b45f5f277b6bb3a19604e008c7964234259b4f747611e0dca5c2d27cb7",
+      "byte_length": 981
+    }
+  },
+  "lineage": {
+    "parents": [
+      {
+        "record_uri": "https://dam.example.net/ver/records/3fedc64a-d12f-562d-9abd-473a559f837d",
+        "producer_id": "did:web:dam.example.net",
+        "record_id": "3fedc64a-d12f-562d-9abd-473a559f837d",
+        "content_hash": "47551af5b69b15e8d2435e89364ec96c9821ba7f62a305cfd5c9c67fbe6a2ed9",
+        "pixel_hash": {
+          "value": "c9d62902371951753249cf66c644be62aeffc51c4562aaada5fac641efb41028",
+          "cpnp_version": "1.0"
+        },
+        "relation": "composed",
+        "note": "left panel"
+      },
+      {
+        "producer_id": "did:web:dam.example.net",
+        "record_id": "4fd7b67d-1a98-58f0-8030-a34503e85d9c",
+        "content_hash": "1ebb03b476a2f3653086e91b7806a04a022383e7e6a095991feccfbba1db2fdf",
+        "pixel_hash": {
+          "value": "ff4f66deef85c32e8e57f2b0e45dcb2f83069df2d4525b767bae19ada36eb6e4",
+          "cpnp_version": "1.0"
+        },
+        "relation": "composed",
+        "note": "right panel"
+      }
+    ],
+    "recipe_sha256": "7d8485b7a2873b6d34d59c7562ab6a329d46b8368a22181603a79efacbf1351b",
+    "recipe_uri": "https://recipes.example.org/compose/7d8485b7a2873b6d34d59c7562ab6a329d46b8368a22181603a79efacbf1351b.json"
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.siglip2-base-p16-256-joint/1.1.0",
+      "kind": "joint_visual_text",
+      "model": {
+        "family": "siglip2",
+        "architecture": "ViT-B/16",
+        "checkpoint": "siglip2-base-patch16-256",
+        "checkpoint_uri": "https://models.example.org/siglip2-base-patch16-256",
+        "revision": "3f0b1c9a7d2e4f6a8b0c1d2e3f4a5b6c7d8e9f01",
+        "weights_sha256": "107ab7f3b0ca8855b0ad54a29477272fa0f818fb028508a74c8c982cda86dc0a",
+        "bundle": {
+          "bundle_digest_alg": "ver-bundle-manifest/1",
+          "manifest_sha256": "8da0801ce170526e55b691a1ffb95a1179639a6f7fa9bdfdf8effab3740d481e",
+          "files": [
+            {
+              "path": "config.json",
+              "byte_length": 59,
+              "sha256": "f2dcfc72ca4f99960ebdce0e924cd880444e6cc2cf891f8ed22470598297cebf"
+            },
+            {
+              "path": "model.safetensors",
+              "byte_length": 60,
+              "sha256": "107ab7f3b0ca8855b0ad54a29477272fa0f818fb028508a74c8c982cda86dc0a"
+            },
+            {
+              "path": "tokenizer.json",
+              "byte_length": 56,
+              "sha256": "efc5fd1068ade7a87cc835ac042ed67239016ef722be043eb836a643af0777cc"
+            }
+          ]
+        }
+      },
+      "dim": 768,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_256",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_256",
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "channel_order": "rgb",
+        "tokenizer": "siglip2-gemma-sentencepiece",
+        "tokenizer_sha256": "efc5fd1068ade7a87cc835ac042ed67239016ef722be043eb836a643af0777cc",
+        "max_length": 64,
+        "truncation": "tail",
+        "casing": "lower"
+      },
+      "reference": {
+        "set_uri": "https://verstandard.org/refsets/siglip2-base-p16-256-joint-1.1.0",
+        "set_manifest_sha256": "44525ee8c830ce1c324cea53008da7d28d1d7e8f506836d6e5cfffa128bfb60f",
+        "tolerance_cosine": 0.999,
+        "tolerance_cosine_p5": 0.997,
+        "tolerance_cosine_worst": 0.995
+      },
+      "descriptor_uri": "https://verstandard.org/spaces/siglip2-base-p16-256-joint-1.1.0.json",
+      "provenance": {
+        "publisher": "verstandard.org",
+        "published_at": "2026-08-01T00:00:00Z",
+        "license": "Apache-2.0"
+      },
+      "descriptor_sha256": "dca19de0a37c609c9b180c7187082a6cd0f6696e2bd75d759f9f3c653d8a74bc"
+    },
+    {
+      "space_id": "org.verstandard.space.siglip2-base-p16-256-binary/1.1.0",
+      "kind": "visual",
+      "model": {
+        "family": "siglip2",
+        "architecture": "ViT-B/16",
+        "checkpoint": "siglip2-base-patch16-256",
+        "checkpoint_uri": "https://models.example.org/siglip2-base-patch16-256",
+        "revision": "3f0b1c9a7d2e4f6a8b0c1d2e3f4a5b6c7d8e9f01",
+        "weights_sha256": "107ab7f3b0ca8855b0ad54a29477272fa0f818fb028508a74c8c982cda86dc0a",
+        "bundle": {
+          "bundle_digest_alg": "ver-bundle-manifest/1",
+          "manifest_sha256": "20035122b5d7708a2c3ca87e98d84f0b4bfb4eff34ec948d932da42629e53545",
+          "files": [
+            {
+              "path": "config.json",
+              "byte_length": 59,
+              "sha256": "f2dcfc72ca4f99960ebdce0e924cd880444e6cc2cf891f8ed22470598297cebf"
+            },
+            {
+              "path": "model.safetensors",
+              "byte_length": 60,
+              "sha256": "107ab7f3b0ca8855b0ad54a29477272fa0f818fb028508a74c8c982cda86dc0a"
+            }
+          ]
+        },
+        "artifacts": [
+          {
+            "role": "pca_basis",
+            "uri": "https://assets.example.org/bases/siglip2-p16-256-pca256.f32le",
+            "sha256": "b7fb860e676c1d6aea14d54427b96881261ce514bec09f0547fc306fc61a3b00",
+            "byte_length": 56
+          }
+        ]
+      },
+      "dim": 256,
+      "dtype": "binary",
+      "normalization": "none",
+      "metric": "hamming",
+      "preprocessing": {
+        "resize": "shortest_side_256",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_256",
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "channel_order": "rgb",
+        "quantization": "sign_of_first_256_pca_components",
+        "bit_packing": "msb_first_8_per_octet"
+      },
+      "reference": {
+        "set_uri": "https://verstandard.org/refsets/siglip2-base-p16-256-binary-1.1.0",
+        "set_manifest_sha256": "ebd8d6181acc243577b4e9d90c7523fa76256dace2e267c36897797e4385b6c2",
+        "tolerance_hamming_max": 6
+      },
+      "descriptor_uri": "https://verstandard.org/spaces/siglip2-base-p16-256-binary-1.1.0.json",
+      "provenance": {
+        "publisher": "verstandard.org",
+        "published_at": "2026-08-01T00:00:00Z",
+        "license": "Apache-2.0"
+      },
+      "descriptor_sha256": "60b84cc47cd6380768bb462e6216fd87159136e292d140ac019ec500d5c4b68d"
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.siglip2-base-p16-256-joint/1.1.0",
+      "dim": 768,
+      "dtype": "fp32",
+      "vector_b64": "ZcgvPaPzPT3P1us7eRgevZhRSL2cemm8fj4JPSatTj3ALqw8mErjvLrlUL32LeC8mYuvPPPvTj1C2Ac9Q5JwvNvVSL184Ry9Xnn6O7e2Pj3hxi49IK3suWPGML2/LD29hS/du0tMHz1QyUc9RV5iPPuhCr00Zk69dM6ovKti5jyK4VA91QzdPOzksryZLk+9S28GvRildzwXVkk9WacbPXSLBLz4dT+93MEtvcCqbDrVwDE9EGI8PcyDzjvqfCC9Bj1HvWU9W7yvAgw9HhtOPcVqpTwfdum8KNlQvUXn2byoOrY8GGlPPaMDBT31sn68StJJvRdqGr2P1ws8YjFAPVq5LD0ZfbG6trcyvZqTO73u07+7UqohPb2sRj0eGFQ8lWANvebLTb3EA6K85ITsPJfMUD1WvdY8vYy5vG2fT71PlQO9292CPHBKSj28KRk93SATvPHoQL1hrSu9QqHsOgKrMz1hwTo9NyCxO3vUIr14GEa9l+5MvKS7Dj2NeE09hJmePOuO77zVu1C9GY/TvBnbvDyZ0U89WCQCPZtfhryIvkq9T+YXvThnGjyinEE9950qPVbgE7uzmjS9aOs5vfJoorth+yM9OoBFPfPARTzXExC9FiFNvRUsm7wklPI85KZQPZ1c0DyrJcC8mf9PvcSwAL2q3ok8ji5LPdafFj15qiG8cExCvSGLKb0UbTE7xYY1PbYROT1srpM7/B4lvQbkRL1Yjz68JmkRPYHFTD2Ku5c8f5T1vMONUL30Jc28Y2zDPG4pUD04df489VqNvIGaS71XVhW9feooPFn4Qj3kdCg9Q/ZOuzJvNr1NNDi97/CEu0g/Jj3fQ0Q96lk3PIq7Er3QZUy980eUvO6P+Dx0cFA9LevJPC+vxrwVT1C9zYP7vGrUkDxfAkw92gkUPR0nMLxZoEO9R1snvUt7bDv3Uzc9MlM3PZFhbDs+XCe9yJ9DvdAgMLz9ChQ9BgJMPWTRkDxghvu89k5QvVmsxrz/7ck8j3BQPVaN+Dz3SpS8JWZMvWS6Er01YDc8bUREPU4+Jj3L/YS7DzU4vWluNr2F3E672XUoPcX3Qj0s5Cg8eFcVvSWaS73sV428xnf+PEspUD2JacM8wyjNvNuNUL3kkfW8i76XPNLFTD3+ZxE9n5U+vJDkRL3/HSW9RbuTO3USOT35hTU9UlMxOxKMKb3ZS0K9JqQhvPSgFj0uLks9n9uJPAmyAL1z/0+9ziLAvGlf0Dz4plA9hJHyPBQvm7xkIU29rBIQvTfHRTzBgEU9YfojPch1orsl7Dm95Jk0vZLGE7vlnio9B5xBPeFgGjxq5xe9JL5KvY5chryaJQI9b9FPPTnYvDzhkdO85rtQvUeM77yAnJ482HhNPXe6Dj3X9Ey8+xhGvXnTIr0KLbE7GsI6PS+qMz20bew6Ta4rvVPoQL2EGhO81SoZPQlKSj3L2oI8j5YDvUCfT73Zibm8GsDWPKTMUD08guw8vQaivC3MTb1lXw29Wx5UPD2tRj1NqSE9veC/u1CUO73htjK9h0mxukK6LD3AMEA9NNELPC1rGr3f0Um90Kx+vOEEBT3maE89wTe2PAXq2bwy2VC9c3PpvLttpTxhG049fQEMPZ5DW7yCPUe94nsgvZiQzjvDYjw9/L8xPZhDbDrBwi29U3U/vRaFBLxsqBs9qVVJPe+edzyHcAa9ZC5PvQLisrySD908j+FQPftf5jxn0ai8dGZOvcagCr16ZGI8yMlHPUBLHz1OPN27bi09vYfFML3K3uu5w8cuPQ+2Pj2ebPo7jOIcvWrVSL0WjHC8e9kHPbrvTj2siK88rzDgvLzlUL3kR+O8sDGsPGKtTj1HPQk9zYBpvA1SSL1rFx69lOPrO0/0PT2Gxy89OVjOtUTJL7338j29C8rru4cZHj0jUUg9a3RpPLY/Cb3qrE690CusvE1N4zy45VA9PivgPIaOr7wr8E69CNcHvXCYcDxN1kg9a+AcPR6G+rtftz69/8UuvXZ77Tk/xzA9ECw9Pb0i3TtWTR+918hHvRBYYrwvowo99GVOPYHLqDxcZea8hOFQvRkK3bzV57I8zi5PPQ9uBj1Aq3e8hVZJvUamG73RkQQ8nXY/PffALT3oEW26rsExvV5hPL3/ds67830gPYo8Rz0sN1s84QMMvdsaTr3PZ6W8zHjpPB/ZUD2F5Nk8jz22vElpT71kAgW9Gbl+PLTSST0BaRo9690LvAQyQL1yuCy9qrCxOoy4Mj3kkjs9Hse/O1erIb0+rEa94RFUvMRhDT2fy009zACiPI2H7LyKzFC9krrWvKCPuTybn089DpQDPevggrzXSkq9pCgZvTYnEzyQ6UA9dqwrPdDU7LrUqzO9qMA6vWQTsbt+1SI99RdGPVboTDzSvA69Q3hNvYiWnryQke88xbtQPVGM0zz53by8w9FPvRUjAr2pYoY8675KPTTlFz2ObRq8PZ1BvQmdKr0b+hM7gps0PazqOT0cXKI7YPwjvbR/Rb2vukW8AhUQPcggTT0XKZs8xJbyvNCmUL3SWdC8iCjAPL//Tz1/rwA9teGJvO4uS724nha9zbAhPAhNQj0wiik91oYxu5GHNb32EDm9k6GTu/kfJT1840Q9EYk+PE5qEb0vxUy9ibiXvBuX9TysjVA9JSPNPDxvw7yQKVC9qXL+vP1djTzemks9N1UVPc7wKLzu+EK98HMovQEQTzv8bzY9ijM4PRTkhDtCQCa9UkNEvaBTN7ywvBI9e2VMPfBElDyFkvi8WXBQvVroybwFssY8NE9QPTqB+zxw15C8uAJMvbcIFL1rLTA86qBDPVBaJz0GlWy7vVQ3vWxSN73WR2y7NV0nPTifQz2CGjA8IAwUva4BTL1dzpC884j7PNdOUD2DqcY80vDJvKtwUL2/ivi8+02UPHtmTD0/uRI9gGY3vPpERL1UPSa9pgqFO9I1OD2gbTY9xsJOO812KL0x90K93N0ovJhYFT3JmUs941SNPFV6/rwoKVC9sGbDvJIrzTzzjVA9SI/1PIzBl7wkxky91WYRveabPjwa5UQ9Ax0lPR3Ik7s0Ezm9LIU1vZE5MbsDjSk9QUtCPdKdITwSoha9zi1LvZTYibxOswA9Tf9PPfEfwDw0YtC8DKdQveSO8rwSMps8siFNPYERED17zUW8R4FFvWH5I72egqI74ew5PRSZND3NrBM71J8qvWybQb2LWhq8hugXPcG9Sj2AWYY83SYCvUXRT71Y1by8qJTTPPa7UD2jie88e5+evCJ5Tb1JuQ69F/tMPH4ZRj120iI93Tmxu9PCOr1dqTO9JjrsujivKz2150A9KxQTPO4rGb2iSUq9u9eCvNCXAz0Sn0899oa5PN7C1ryxzFC9lH/svLYJojx0zE09NV4NPZgkVLy8rUa9R6ghvY3tvzsFlTs9C7YyPfYVsToquyy9HzBAvdnKC7xDbBo9ddFJPaymfjwfBgW9tWhPvds0trzG7Nk8O9lQPcZw6TyxcKW8pRtOvUsADL3WSVs8/j1HPdp6ID1knc67dWM8vSO/Mb1w3Gu6psMtPa50Pz24fgQ8gKkbvTtVSb3HmHe8w3EGPTAuTz0Y37I8ThLdvJThUL1KXea8WtSoPLNmTj2Rnwo9r2pivEHKR701Sh+9FkndOx0uPT2rxDA9dBDrOaXILr1mtT693l/6u53jHD341Eg96oVwPLXaB72C7069v4WvvGcz4Dy+5VA9L0XjPKA0rLyerU69EDwJvf6GaTyCUkg9XhYePVjw67v69D29p8YvvTlYTjYjyi89S/I9PUa96zuVGh69rlBIvTpuabztQAk9rqxOPeAorDwBUOO8tuVQvYUo4Lxzka88ZPBOPc/VBz2dnnC8vtZIvVvfHL3fkvo7CLg+PR3FLj3MSe65G8gwvWErPb30Fd27YU4fPV/IRz3bUWI8ZKQKvbVlTr2OyKi8DGjmPH/hUD1cB908v+qyvAMvT73TbAa9abF3PPNWST0zpRs9L5gEvEJ3P70SwC29EHltOofCMT2sYDw9M2rOO/t+IL0OPEe98zBbvBQFDD2YGk492WSlPHh76bwW2VC9xeHZvHVAtjx6aU89",
+      "produced_at": "2026-08-23T09:14:05Z",
+      "producer": "ver-studio/1.1.0-draft.2",
+      "compute": {
+        "runtime": "onnxruntime",
+        "runtime_version": "1.22.0",
+        "precision": "fp32",
+        "device_class": "gpu"
+      }
+    },
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.siglip2-base-p16-256-binary/1.1.0",
+      "dim": 256,
+      "dtype": "binary",
+      "vector_b64": "w4448cccOOOPHHHHjjjhxxx4444ccceOOOHHHHjjjhw=",
+      "produced_at": "2026-08-23T09:14:05Z",
+      "producer": "ver-studio/1.1.0-draft.2",
+      "compute": {
+        "runtime": "onnxruntime",
+        "runtime_version": "1.22.0",
+        "precision": "fp32",
+        "device_class": "gpu"
+      }
+    },
+    {
+      "role": "contextual",
+      "space_id": "org.verstandard.space.siglip2-base-p16-256-joint/1.1.0",
+      "dim": 768,
+      "dtype": "fp32",
+      "source": {
+        "class": "alt_text",
+        "text_sha256": "bed074a614a41a9e6fb55651a7c59833fbccd7a419ab20e0f94eee4407a33f03",
+        "lang": "en",
+        "provenance": "dc:description in the preserved XMP packet"
+      },
+      "vector_ref": {
+        "uri": "https://vectors.example.org/3ad2cc9d-d6c8-513b-a8de-acba6153d976/ctx-alt-text.f32le",
+        "sha256": "5325122a341d2c4550cb5aa75831938fb6a20433ff75de17ab847b80c0ccc551",
+        "byte_length": 3072
+      },
+      "produced_at": "2026-08-23T09:14:06Z",
+      "producer": "ver-studio/1.1.0-draft.2",
+      "compute": {
+        "runtime": "onnxruntime",
+        "runtime_version": "1.22.0",
+        "precision": "fp32",
+        "device_class": "gpu"
+      }
+    }
+  ],
+  "metadata": {
+    "raw": [
+      {
+        "segment": "xmp",
+        "index": 0,
+        "bytes": "PD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz48eDp4bXBtZXRhIHhtbG5zOng9ImFkb2JlOm5zOm1ldGEvIj48cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPjxyZGY6RGVzY3JpcHRpb24geG1sbnM6ZGM9Imh0dHA6Ly9wdXJsLm9yZy9kYy9lbGVtZW50cy8xLjEvIiB4bWxuczp4bXBOb3RlPSJodHRwOi8vbnMuYWRvYmUuY29tL3htcC9ub3RlLyIgeG1wTm90ZTpIYXNFeHRlbmRlZFhNUD0iQTFCMkMzRDRFNUY2MDcxODI5M0E0QjVDNkQ3RThGOTAiPjxkYzpkZXNjcmlwdGlvbj5Ud28gYm9hcmR3YWxrIHN0dWRpZXMgY29tcG9zaXRlZCBzaWRlIGJ5IHNpZGUgYXQgc3Vuc2V0LjwvZGM6ZGVzY3JpcHRpb24+PC9yZGY6RGVzY3JpcHRpb24+PC9yZGY6UkRGPjwveDp4bXBtZXRhPjw/eHBhY2tldCBlbmQ9InciPz4=",
+        "sha256": "c84ded4405064c166f2203abd5fbe882a0127375b63ace1e54caf288569e77a0",
+        "consumed_by_cpnp": false
+      },
+      {
+        "segment": "xmp",
+        "index": 1,
+        "bytes": "aHR0cDovL25zLmFkb2JlLmNvbS94bXAvZXh0ZW5zaW9uLwBBMUIyQzNENEU1RjYwNzE4MjkzQTRCNUM2RDdFOEY5MDw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+PHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyI+PHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj48cmRmOkRlc2NyaXB0aW9uIHhtbG5zOnZlcj0iaHR0cHM6Ly92ZXJzdGFuZGFyZC5vcmcvbnMvZXhhbXBsZS8iPjx2ZXI6bm90ZT5FeHRlbmRlZCBwYWNrZXQgY29udGludWF0aW9uLCBzZWNvbmQgQVBQMSBtYXJrZXIuPC92ZXI6bm90ZT48L3JkZjpEZXNjcmlwdGlvbj48L3JkZjpSREY+PC94OnhtcG1ldGE+PD94cGFja2V0IGVuZD0idyI/Pg==",
+        "sha256": "f0487dbed310b24c8063e2e6221ac791aaa7f1886ad01c9756105f41e27b9024",
+        "consumed_by_cpnp": false
+      },
+      {
+        "segment": "icc",
+        "index": 0,
+        "bytes_ref": {
+          "uri": "https://assets.example.org/segments/1158c5f3c7f98a4a64cf42bfde3627c238362b98ce98cf8cef2043745adde739",
+          "sha256": "1158c5f3c7f98a4a64cf42bfde3627c238362b98ce98cf8cef2043745adde739",
+          "byte_length": 3144
+        },
+        "sha256": "1158c5f3c7f98a4a64cf42bfde3627c238362b98ce98cf8cef2043745adde739",
+        "consumed_by_cpnp": true
+      },
+      {
+        "segment": "c2pa",
+        "index": 0,
+        "bytes": "YzJwYQBJTExVU1RSQVRJVkUtTUFOSUZFU1QtU1RPUkUtTk9ULUEtUkVBTC1DMlBBLU1BTklGRVNUAHVybjp1dWlkOjZiMWYzZjZlLTJmNWEtNGQxZC05YTJhLTNmMWM4ZDBlNGI3Nw==",
+        "sha256": "7848af9ba3b3916b22710cc2a36da6c486e982546a59c9e9f65b02af11a97010",
+        "consumed_by_cpnp": false
+      }
+    ],
+    "availability": {
+      "exif": "redacted",
+      "xmp": "present",
+      "iptc": "upstream_withheld",
+      "icc": "present",
+      "c2pa": "present",
+      "other": "stripped_suspected"
+    },
+    "availability_basis": {
+      "iptc": "The compositing DAM's export API does not emit IPTC-IIM at all; no IIM block was ever delivered to this Producer, so nothing about it was observed or removed here.",
+      "other": "The DAM re-encoder drops unrecognised APPn segments; both parents carried an APP13 Photoshop resource block that is absent from the composite."
+    },
+    "normalized": {
+      "@context": {
+        "dc": "http://purl.org/dc/elements/1.1/",
+        "exif": "http://ns.adobe.com/exif/1.0/",
+        "Iptc4xmpExt": "http://iptc.org/std/Iptc4xmpExt/2008-02-29/"
+      },
+      "dc:description": "Two boardwalk studies composited side by side at sunset.",
+      "exif:GPSLatitude": {
+        "redacted": true,
+        "reason": "gdpr-precise-location",
+        "commitment_sha256": "f60ae890a20635dedf6a16f1a6ab0dba1adf0a157dae2ba2b879b129815e9c7c",
+        "commitment_alg": "ver-redaction-commitment/1"
+      },
+      "Iptc4xmpExt:PersonInImage": {
+        "redacted": true,
+        "reason": "never-received-upstream"
+      }
+    },
+    "conflicts": [],
+    "trust": [
+      {
+        "field": "dc:description",
+        "tier": "unsigned"
+      },
+      {
+        "field": "exif:GPSLatitude",
+        "tier": "unsigned"
+      },
+      {
+        "field": "Iptc4xmpExt:PersonInImage",
+        "tier": "unsigned"
+      }
+    ],
+    "redactions": [
+      {
+        "field": "exif:GPSLatitude",
+        "reason": "gdpr-precise-location",
+        "state": "producer_performed",
+        "commitment_sha256": "f60ae890a20635dedf6a16f1a6ab0dba1adf0a157dae2ba2b879b129815e9c7c",
+        "commitment_alg": "ver-redaction-commitment/1",
+        "normalized_pointer": "/exif:GPSLatitude"
+      },
+      {
+        "field": "Iptc4xmpExt:PersonInImage",
+        "reason": "never-received-upstream",
+        "state": "upstream_withheld",
+        "normalized_pointer": "/Iptc4xmpExt:PersonInImage"
+      }
+    ]
+  },
+  "provenance": {
+    "acquisition": {
+      "method": "other",
+      "acquired_at": "2026-08-23T09:13:40Z",
+      "actor": "ver-studio"
+    },
+    "chain": [
+      {
+        "at": "2026-08-23T09:13:40Z",
+        "actor": "ver-studio",
+        "action": "import",
+        "tool": "ver-fetch/1.1.0-draft.2"
+      },
+      {
+        "at": "2026-08-23T09:13:52Z",
+        "actor": "ver-studio",
+        "action": "compose",
+        "tool": "ver-compose/1.1.0-draft.2",
+        "params_sha256": "7d8485b7a2873b6d34d59c7562ab6a329d46b8368a22181603a79efacbf1351b"
+      },
+      {
+        "at": "2026-08-23T09:14:01Z",
+        "actor": "ver-studio",
+        "action": "decode",
+        "tool": "libpng 1.6.43 (sandboxed)"
+      },
+      {
+        "at": "2026-08-23T09:14:02Z",
+        "actor": "ver-studio",
+        "action": "normalize",
+        "tool": "cpnp-1/lcms2",
+        "params_sha256": "9426e229ab39719d95aec8e0e8a6b7aeb304c5bf8384b014b04a6038806f50d5"
+      },
+      {
+        "at": "2026-08-23T09:14:03Z",
+        "actor": "ver-studio",
+        "action": "redact",
+        "tool": "ver-redact/1.1.0-draft.2"
+      },
+      {
+        "at": "2026-08-23T09:14:05Z",
+        "actor": "ver-studio",
+        "action": "embed",
+        "tool": "onnxruntime-gpu 1.22 (image tower, both spaces)"
+      },
+      {
+        "at": "2026-08-23T09:14:06Z",
+        "actor": "ver-studio",
+        "action": "embed",
+        "tool": "onnxruntime-gpu 1.22 (text tower)"
+      },
+      {
+        "at": "2026-08-23T09:14:07Z",
+        "actor": "ver-studio",
+        "action": "publish",
+        "target": "record",
+        "uri": "https://studio.example.org/ver/records/3ad2cc9d-d6c8-513b-a8de-acba6153d976",
+        "tool": "ver-publish/1.1.0-draft.2"
+      }
+    ],
+    "c2pa": {
+      "status": "unverifiable",
+      "manifest_sha256": "7848af9ba3b3916b22710cc2a36da6c486e982546a59c9e9f65b02af11a97010",
+      "reason": "trust_store_unavailable",
+      "error_detail": "manifest present and well-formed; the signer's trust list was unreachable at validation time (network egress blocked)"
+    }
+  },
+  "extensions": {
+    "org.example.studio": {
+      "collection": "boardwalk-composites",
+      "review_state": "approved"
+    }
+  }
+}

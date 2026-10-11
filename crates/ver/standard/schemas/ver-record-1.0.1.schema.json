@@ -1,0 +1,346 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://verstandard.org/schemas/ver-record-1.0.1.json",
+  "title": "VER Record 1.0 (artifact release 1.0.1)",
+  "description": "Visual Embedding Record — a metadata-resilient representation of a still raster image and its embeddings. Structural validation only; conformance levels L0-L3 are validated by profile (spec section 11). Artifact release 1.0.1 is the corrective republication of the VER 1.0 wire format: records still carry ver_version \"1.0\" and the unchanged CPNP-1 algorithm, and this schema differs from the frozen 1.0.0 schema only by the three corrections recorded in VER-1.0.1-errata-annex.md (perceptual digest length bound to algorithm; identity.pixel_hash closed; identity.content_hash closed).",
+  "type": "object",
+  "required": ["ver_version", "cpnp_version", "record_id", "created_at", "identity", "image", "spaces", "embeddings"],
+  "additionalProperties": false,
+  "properties": {
+    "ver_version": { "const": "1.0" },
+    "cpnp_version": { "const": "1.0" },
+    "record_id": { "type": "string", "format": "uuid" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "generator": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": { "name": { "type": "string" }, "version": { "type": "string" } },
+      "additionalProperties": false
+    },
+    "conformance_level": { "enum": ["L0", "L1", "L2", "L3"] },
+
+    "identity": {
+      "type": "object",
+      "required": ["content_hash", "pixel_hash"],
+      "additionalProperties": false,
+      "properties": {
+        "content_hash": {
+          "allOf": [{ "$ref": "#/$defs/sha256Hash" }],
+          "unevaluatedProperties": false
+        },
+        "pixel_hash": {
+          "allOf": [{ "$ref": "#/$defs/sha256Hash" }],
+          "type": "object",
+          "required": ["width", "height"],
+          "additionalProperties": false,
+          "properties": {
+            "alg": true, "value": true,
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "perceptual": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["alg", "value"],
+            "additionalProperties": false,
+            "properties": {
+              "alg": { "enum": ["pdq/1.0", "phash-dct/64"] },
+              "value": { "type": "string", "pattern": "^[a-f0-9]+$" }
+            },
+            "allOf": [
+              {
+                "if": { "required": ["alg"], "properties": { "alg": { "const": "pdq/1.0" } } },
+                "then": { "properties": { "value": { "type": "string", "pattern": "^[a-f0-9]{64}$" } } }
+              },
+              {
+                "if": { "required": ["alg"], "properties": { "alg": { "const": "phash-dct/64" } } },
+                "then": { "properties": { "value": { "type": "string", "pattern": "^[a-f0-9]{16}$" } } }
+              }
+            ]
+          }
+        }
+      }
+    },
+
+    "image": {
+      "type": "object",
+      "required": ["format", "width", "height", "animated", "alpha_present", "hdr_present"],
+      "additionalProperties": false,
+      "properties": {
+        "format": { "enum": ["jpeg", "png", "webp", "avif", "heic", "tiff", "bmp", "gif"] },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "animated": { "type": "boolean" },
+        "alpha_present": { "type": "boolean" },
+        "hdr_present": { "type": "boolean" },
+        "source_bytes_ref": { "$ref": "#/$defs/byteRef" }
+      }
+    },
+
+    "spaces": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/spaceDescriptor" }
+    },
+
+    "embeddings": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/embedding" },
+      "contains": {
+        "type": "object",
+        "properties": { "role": { "const": "canonical_visual" } },
+        "required": ["role"]
+      }
+    },
+
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "raw": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["segment", "bytes", "sha256"],
+            "additionalProperties": false,
+            "properties": {
+              "segment": { "enum": ["exif", "xmp", "iptc-iim", "icc", "c2pa", "other"] },
+              "bytes": { "type": "string", "contentEncoding": "base64" },
+              "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            }
+          }
+        },
+        "availability": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "exif": { "$ref": "#/$defs/availabilityState" },
+            "xmp": { "$ref": "#/$defs/availabilityState" },
+            "iptc": { "$ref": "#/$defs/availabilityState" },
+            "icc": { "$ref": "#/$defs/availabilityState" },
+            "c2pa": { "$ref": "#/$defs/availabilityState" }
+          }
+        },
+        "availability_basis": { "type": "string", "description": "Required narrative basis when any family is stripped_suspected." },
+        "normalized": { "type": "object", "description": "Reconciled view; IPTC Photo Metadata JSON-LD vocabulary preferred." },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["field", "values"],
+            "additionalProperties": false,
+            "properties": {
+              "field": { "type": "string" },
+              "values": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "object",
+                  "required": ["source", "value"],
+                  "properties": {
+                    "source": { "enum": ["c2pa", "xmp", "iptc-iim", "exif", "platform"] },
+                    "value": {},
+                    "trust": { "$ref": "#/$defs/trustTier" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "trust": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["field", "tier"],
+            "properties": { "field": { "type": "string" }, "tier": { "$ref": "#/$defs/trustTier" } }
+          }
+        },
+        "redactions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["field", "reason"],
+            "additionalProperties": false,
+            "properties": {
+              "field": { "type": "string" },
+              "reason": { "type": "string" },
+              "salted_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            }
+          }
+        }
+      }
+    },
+
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "acquisition": {
+          "type": "object",
+          "required": ["method", "acquired_at"],
+          "additionalProperties": false,
+          "properties": {
+            "method": { "enum": ["camera_capture", "http_fetch", "user_upload", "dataset_import", "other"] },
+            "source_uri": { "type": "string", "format": "uri" },
+            "acquired_at": { "type": "string", "format": "date-time" },
+            "actor": { "type": "string" }
+          }
+        },
+        "chain": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["at", "actor", "action", "tool"],
+            "additionalProperties": false,
+            "properties": {
+              "at": { "type": "string", "format": "date-time" },
+              "actor": { "type": "string" },
+              "action": { "enum": ["decode", "normalize", "embed", "transcode", "redact", "import"] },
+              "tool": { "type": "string" },
+              "params_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            }
+          }
+        },
+        "c2pa": {
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "enum": ["valid", "invalid", "missing"] },
+            "manifest_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+          }
+        },
+        "signature": {
+          "type": "object",
+          "required": ["format", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "format": { "enum": ["jws-detached", "cose-sign1"] },
+            "canonicalization": { "const": "rfc8785-jcs" },
+            "value": { "type": "string" },
+            "key_id": { "type": "string" }
+          }
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "sha256Hash": {
+      "type": "object",
+      "required": ["alg", "value"],
+      "properties": {
+        "alg": { "const": "sha-256" },
+        "value": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "byteRef": {
+      "type": "object",
+      "required": ["uri", "sha256", "byte_length"],
+      "additionalProperties": false,
+      "properties": {
+        "uri": { "type": "string", "format": "uri" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "byte_length": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "availabilityState": { "enum": ["present", "absent", "stripped_suspected", "redacted", "unknown"] },
+    "trustTier": { "enum": ["c2pa_verified", "signed_unverified", "unsigned"] },
+    "spaceDescriptor": {
+      "type": "object",
+      "required": ["space_id", "kind", "model", "dim", "dtype", "normalization", "metric", "preprocessing"],
+      "additionalProperties": false,
+      "properties": {
+        "space_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+/[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+          "description": "Immutable: reverse-DNS + '/' + semver. New weights, preprocessing, dtype, or metric => new space_id."
+        },
+        "kind": { "enum": ["visual", "text", "fused"] },
+        "model": {
+          "type": "object",
+          "required": ["family", "checkpoint", "weights_sha256"],
+          "properties": {
+            "family": { "type": "string" },
+            "architecture": { "type": "string" },
+            "checkpoint": { "type": "string" },
+            "weights_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+          }
+        },
+        "dim": { "type": "integer", "minimum": 1 },
+        "dtype": { "enum": ["fp32", "fp16", "bf16", "int8", "binary"] },
+        "normalization": { "enum": ["l2", "none"] },
+        "metric": { "enum": ["cosine", "dot", "l2"] },
+        "preprocessing": {
+          "type": "object",
+          "description": "Visual: resize policy, interpolation, antialias, crop, mean, std, channel_order. Text: tokenizer id + sha256, max_length, truncation, casing.",
+          "additionalProperties": true
+        },
+        "reference": {
+          "type": "object",
+          "required": ["set_uri", "tolerance_cosine"],
+          "properties": {
+            "set_uri": { "type": "string", "format": "uri" },
+            "tolerance_cosine": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+          }
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "publisher": { "type": "string" },
+            "published_at": { "type": "string", "format": "date-time" },
+            "license": { "type": "string" }
+          }
+        }
+      }
+    },
+    "embedding": {
+      "type": "object",
+      "required": ["role", "space_id"],
+      "additionalProperties": false,
+      "properties": {
+        "role": { "enum": ["canonical_visual", "contextual", "fused"] },
+        "space_id": { "type": "string" },
+        "dim": { "type": "integer", "minimum": 1 },
+        "dtype": { "enum": ["fp32", "fp16", "bf16", "int8", "binary"] },
+        "vector": { "type": "array", "items": { "type": "number" } },
+        "vector_b64": { "type": "string", "contentEncoding": "base64", "description": "dtype-tagged via the embedding's dtype field; little-endian" },
+        "vector_ref": { "$ref": "#/$defs/byteRef" },
+        "produced_at": { "type": "string", "format": "date-time" },
+        "producer": { "type": "string" },
+        "source": {
+          "type": "object",
+          "required": ["class", "text_sha256"],
+          "additionalProperties": false,
+          "properties": {
+            "class": { "enum": ["ocr_pixels", "caption_auto", "caption_human", "alt_text", "title", "description", "surrounding_text", "page_context"] },
+            "text_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "lang": { "type": "string" },
+            "provenance": { "type": "string" }
+          }
+        },
+        "recipe": {
+          "type": "object",
+          "required": ["inputs", "method"],
+          "properties": {
+            "inputs": { "type": "array", "items": { "type": "string" }, "minItems": 2 },
+            "weights": { "type": "array", "items": { "type": "number" } },
+            "method": { "type": "string" }
+          }
+        }
+      },
+      "oneOf": [
+        { "required": ["vector"] },
+        { "required": ["vector_b64"] },
+        { "required": ["vector_ref"] }
+      ],
+      "allOf": [
+        { "if": { "properties": { "role": { "const": "contextual" } } }, "then": { "required": ["source"] } },
+        { "if": { "properties": { "role": { "const": "fused" } } }, "then": { "required": ["recipe"] } }
+      ]
+    }
+  }
+}

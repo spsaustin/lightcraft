@@ -120,6 +120,7 @@ pub fn poll(app: &mut LightcraftApp, ctx: &egui::Context) {
             let cancelled = task.cancel.load(Ordering::Relaxed);
             let total = task.total;
             app.export = None;
+            let mut secs = crate::TOAST_SECONDS;
             let msg = match r {
                 Ok(files) => {
                     let sheet = files.first().filter(|f| f["contactSheet"] == true);
@@ -140,12 +141,18 @@ pub fn poll(app: &mut LightcraftApp, ctx: &egui::Context) {
                     if cancelled {
                         m += " · cancelled";
                     }
+                    // files that got no VER Record: said once for the batch (and the toast stays to be read)
+                    if let Some(line) = crate::panels::ver::export_notes(&files) {
+                        m += " · ";
+                        m += &line;
+                        secs = 8.0;
+                    }
                     app.last_export_result = Some(json!({"files": files, "cancelled": cancelled}));
                     m
                 }
                 Err(e) => e,
             };
-            app.toast(ctx, msg);
+            app.toast_for(ctx, msg, secs);
         }
         Err(std::sync::mpsc::TryRecvError::Empty) => {
             let (done, current) = task.progress.lock().map(|g| g.clone()).unwrap_or_default();

@@ -498,6 +498,9 @@ pub struct UiState {
     /// Transient toast text, expiry (seconds of app time), and optional colour-label styling.
     #[serde(skip)]
     pub toast: Option<(String, f64, Option<lightcraft_catalog::ColorLabel>)>,
+    /// A button in the toast (e.g. "Open Settings ▸ Search"), for as long as the toast shows `text`.
+    #[serde(skip)]
+    pub toast_action: Option<ToastAction>,
     /// The result of the last Find Missing Photos (it searches in the background).
     #[serde(skip)]
     pub last_find_missing: Option<serde_json::Value>,
@@ -505,6 +508,71 @@ pub struct UiState {
     pub status: String,
     #[serde(skip)]
     pub dialog: Option<Dialog>,
+    /// The grid shows a ranked search's results or a photo's duplicates (the filter's `only` list, set by
+    /// `search.text` / `photo.duplicates`): what its chip says, and the sort to go back to (`panels::vera`).
+    #[serde(skip)]
+    pub only_origin: Option<OnlyOrigin>,
+    /// The import review's "Same pictures" choice (`stack`, `import` or `skip`; "" is the default, stack), kept
+    /// for the session.
+    #[serde(skip)]
+    pub import_near_duplicate: String,
+}
+
+/// Where the filter's `only` list came from, so its chip can say so and its × can put the view back.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OnlyOrigin {
+    pub kind: OnlyKind,
+    /// The list it set: once the filter's `only` is anything else, this origin is over.
+    pub ids: Vec<lightcraft_catalog::PhotoId>,
+    /// The sort from before a ranked search switched to relevance (restored when the results go).
+    pub sort: Option<lightcraft_catalog::Sort>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum OnlyKind {
+    /// `search.text`: the results of this query, best first; `meaning` when the vector lane ranked them too.
+    Ranked { query: String, meaning: bool },
+    /// `photo.duplicates`: the photo (by file name) and the photos that are the same picture, each with its tier
+    /// (`bytes`, `pixels`, `picture`, `possible`, `similar`), which its cell names.
+    Duplicates { name: String, tiers: Vec<(u64, String)> },
+    /// `photo.similar`: the photo (by file name) and the pictures that look like it, best first.
+    LooksLike { name: String },
+}
+
+/// The review of Describe's proposals as it stands: the proposal open (its photo) and the edits made to it, which
+/// fields are ticked, what was skipped, and this session's counts.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct DescribeReview {
+    /// The photo whose proposal the fields below hold (none until the first is read).
+    pub photo: Option<u64>,
+    pub title: String,
+    pub caption: String,
+    pub alt_text: String,
+    pub keywords: Vec<String>,
+    /// The keyword being typed into the proposal's "Add keyword" field.
+    pub new_keyword: String,
+    /// The proposal's fields as `describe.accept` names them, and whether each is ticked.
+    pub fields: Vec<(String, bool)>,
+    /// Add the keywords to the photo's (off) or replace them (`replaceKeywords`).
+    pub replace_keywords: bool,
+    /// Photos passed over with Skip: shown again once every other proposal has been seen.
+    pub skipped: Vec<u64>,
+    pub accepted: usize,
+    pub rejected: usize,
+    /// Reject All asked: waiting for the confirmation.
+    pub confirm_clear: bool,
+    /// Why the last Accept or Reject did not work.
+    pub error: Option<String>,
+}
+
+/// The button a toast offers: its label and the command it runs (`app.run`), shown while the toast says `text`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ToastAction {
+    pub text: String,
+    pub label: String,
+    pub command: String,
+    pub params: serde_json::Value,
 }
 
 /// Settings group ids (`SettingsGroup` serde names) a new preset includes by default: everything
@@ -705,6 +773,10 @@ pub enum Dialog {
         preset_name: String,
         limit_kb: u32,
         dir: String,
+        /// "Write VER Records" for this export (`None`: as Settings ▸ Search ▸ VER Records says, read when the dialog
+        /// first draws).
+        #[serde(default)]
+        ver_records: Option<bool>,
     },
     /// Photo Merge (HDR / Panorama / HDR Panorama) options; the preview lives in the app.
     Merge {
@@ -722,6 +794,39 @@ pub enum Dialog {
         /// Why the download couldn't start (shown in the dialog).
         #[serde(default)]
         error: Option<String>,
+    },
+    /// The SigLIP 2 model behind search by meaning (Settings ▸ Search): its terms and the "I accept" box before
+    /// `vera.model.download`. `info` is the engine's `vera.model.status`.
+    VeraModel {
+        info: serde_json::Value,
+        accepted: bool,
+        /// Why the download could not start (shown in the dialog).
+        #[serde(default)]
+        error: Option<String>,
+    },
+    /// Window ▸ Review Descriptions (`panels::describe_review`): Describe's proposals (`describe.list`), one at a time,
+    /// each field beside the photo's own value and editable before Accept, Reject or Skip.
+    ReviewDescriptions {
+        #[serde(default)]
+        review: DescribeReview,
+    },
+    /// Photo ▸ Show VER Record… (`panels::ver`): the photo's Record, or why it has none. What it shows is kept in
+    /// `Caches::ver` (a Record can be megabytes; the dialog is copied every frame).
+    VerRecord {
+        photo: u64,
+    },
+    /// File ▸ Read VER Record… (`panels::ver`): what `ver.import` said about a Record file (`result`), or why it could
+    /// not be read (`error`).
+    VerImport {
+        file: String,
+        #[serde(default)]
+        result: serde_json::Value,
+        #[serde(default)]
+        error: Option<String>,
+    },
+    /// The photos the last Write VER Records… skipped: (file name, reason).
+    VerSkipped {
+        rows: Vec<(String, String)>,
     },
     /// Confirm moving photos to Recently Deleted.
     ConfirmDelete {
@@ -880,9 +985,12 @@ impl Default for UiState {
             compare: None,
             reference: None,
             toast: None,
+            toast_action: None,
             last_find_missing: None,
             status: String::new(),
             dialog: None,
+            only_origin: None,
+            import_near_duplicate: String::new(),
         }
     }
 }

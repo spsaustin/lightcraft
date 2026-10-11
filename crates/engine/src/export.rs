@@ -1354,6 +1354,9 @@ pub struct Exported {
     /// Files written next to it, named like it with another extension: `(extension, bytes)` (the
     /// XMP sidecar of an `Original` export).
     pub sidecars: Vec<(&'static str, Vec<u8>)>,
+    /// Its VER Records, analysed from these bytes and written beside the file once its path is
+    /// known (`docs/ver.md` → Export sidecars); `None` when they are off.
+    pub ver: Option<crate::ver::export::Pending>,
 }
 
 /// Output size of photo `p` under `o` (its cropped full size when `o.resize` is `None`).
@@ -1383,6 +1386,8 @@ pub struct PreparedExport {
     /// Estimated working memory of [`Self::run`] (bytes), held from [`crate::memory::export_gate`]
     /// while it runs beside other photos of a batch.
     weight: usize,
+    /// The VER Records' hook: the exported bytes are analysed right after encoding.
+    ver: Option<crate::ver::export::Hook>,
 }
 
 struct RenderWork {
@@ -1468,7 +1473,8 @@ fn prepare_guarded(
         };
         (work, weight)
     };
-    Ok(PreparedExport { photo: id, file_name, work, guard, weight })
+    let ver = crate::ver::export::prepare(session, id, o);
+    Ok(PreparedExport { photo: id, file_name, work, guard, weight, ver })
 }
 
 /// Working memory of rendering a photo of `full_px` pixels (long edge `long`) from source level
@@ -1484,8 +1490,17 @@ fn render_weight(full_px: usize, long: usize, level: crate::media::SourceLevel, 
 
 impl PreparedExport {
     pub fn run(self) -> Result<Exported, String> {
-        let file_name = self.file_name;
-        match self.work {
+        let ver = self.ver;
+        let mut out = run_work(self.file_name, self.work)?;
+        // the Records come from the exported bytes; a failure is a note on the result, never the export's error
+        out.ver = ver.map(|h| h.analyze(&out.bytes));
+        Ok(out)
+    }
+}
+
+fn run_work(file_name: String, work: Work) -> Result<Exported, String> {
+    {
+        match work {
             Work::Render(w) => {
                 let RenderWork { job, hdr_job, meta, opts } = *w;
                 let r = job.run().rendered?;
@@ -1497,7 +1512,7 @@ impl PreparedExport {
                     }
                     None => encode_rendered(&r, &opts, meta.as_ref())?,
                 };
-                Ok(Exported { file_name, bytes, width: r.image.width, height: r.image.height, sidecars: Vec::new() })
+                Ok(Exported { file_name, bytes, width: r.image.width, height: r.image.height, sidecars: Vec::new(), ver: None })
             }
             Work::File { path, read, packet, dng, label, size } => {
                 let bytes = match &read {
@@ -1505,7 +1520,7 @@ impl PreparedExport {
                     None => std::fs::read(&path).map_err(|e| format!("{path}: {e}"))?,
                 };
                 let Some(dng) = dng else {
-                    return Ok(Exported { file_name, bytes, width: size.0, height: size.1, sidecars: vec![("xmp", packet.into_bytes())] });
+                    return Ok(Exported { file_name, bytes, width: size.0, height: size.1, sidecars: vec![("xmp", packet.into_bytes())], ver: None });
                 };
                 if lightcraft_raw::probe(&bytes).is_none() {
                     return Err(format!("{label}: DNG export needs a raw photo"));
@@ -1519,7 +1534,7 @@ impl PreparedExport {
                 };
                 let dng = lightcraft_raw::write_dng(&raw, &lightcraft_raw::DngWriteOptions { xmp: Some(packet), compression, ..Default::default() })
                     .map_err(|e| e.to_string())?;
-                Ok(Exported { file_name, bytes: dng, width: raw.width, height: raw.height, sidecars: Vec::new() })
+                Ok(Exported { file_name, bytes: dng, width: raw.width, height: raw.height, sidecars: Vec::new(), ver: None })
             }
         }
     }
@@ -1823,8 +1838,11 @@ impl<'a> Placer<'a> {
                 return Ok(());
             }
         };
-        // the exported file and its sidecars
-        let group = |main: &str| std::iter::once(main.to_string()).chain(e.sidecars.iter().map(|(x, _)| sidecar_path(main, x))).collect::<Vec<_>>();
+        // the exported file, its sidecars and its VER Records
+        let group = |main: &str| {
+            let records = e.ver.as_ref().map(|_| crate::ver::export::sidecar_names(main)).into_iter().flatten();
+            std::iter::once(main.to_string()).chain(e.sidecars.iter().map(|(x, _)| sidecar_path(main, x))).chain(records).collect::<Vec<_>>()
+        };
         let path = match self.to.exact.as_deref().filter(|_| self.single) {
             Some(p) => Ok(p.to_string()),
             None => {
@@ -1863,12 +1881,31 @@ impl<'a> Placer<'a> {
                 write(sc, bytes)?;
                 sidecars.push(sc.clone());
             }
-            Ok((path, files, sidecars))
+            // the Records, once the file is in place: assembled for its final path; any failure is a note
+            let mut notes = Vec::new();
+            if let Some(pending) = &e.ver {
+                match pending.finish(&path) {
+                    Ok(records) => {
+                        for (rp, bytes) in records {
+                            match write(&rp, &bytes) {
+                                Ok(()) => sidecars.push(rp),
+                                Err(err) => notes.push(format!("VER Record not written: {err}")),
+                            }
+                        }
+                    }
+                    Err(note) => notes.push(note),
+                }
+            }
+            Ok((path, files, sidecars, notes))
         });
         match written {
-            Ok((path, files, sidecars)) => {
+            Ok((path, files, sidecars, notes)) => {
                 self.taken.extend(files);
-                self.out.push(json!({"path": path, "width": e.width, "height": e.height, "bytes": e.bytes.len(), "sidecars": sidecars}));
+                let mut row = json!({"path": path, "width": e.width, "height": e.height, "bytes": e.bytes.len(), "sidecars": sidecars});
+                if !notes.is_empty() {
+                    row["notes"] = json!(notes);
+                }
+                self.out.push(row);
             }
             Err(err) if self.stop_on_error => return Err(err),
             Err(err) => self.out.push(json!({"photo": photo.0, "file": file, "error": err})),

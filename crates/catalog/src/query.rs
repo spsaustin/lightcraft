@@ -79,6 +79,9 @@ pub enum SortKey {
     /// A shuffle fixed by [`Sort::seed`]: the same seed always gives the same order, and photos
     /// added or edited later never reshuffle the others. Pick a new seed to reshuffle.
     Random,
+    /// The order of [`Filter::only`] (a search's ranking, best first; `search.text`): descending is that order,
+    /// photos it does not list come last, ties by id.
+    Relevance,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -364,6 +367,10 @@ impl Catalog {
     pub fn query(&self, filter: &Filter, sort: &Sort) -> Vec<PhotoId> {
         let root = filter.library_root();
         let mut v: Vec<&Photo> = self.photos().map(|p| p.as_ref()).filter(|p| filter.matches_in(p, self, root.as_deref())).collect();
+        // relevance: a photo's place in `only` (the first place it is listed), unlisted ones after every listed one
+        let rank: std::collections::HashMap<PhotoId, usize> =
+            if sort.key == SortKey::Relevance { filter.only.iter().enumerate().rev().map(|(i, id)| (*id, i)).collect() } else { Default::default() };
+        let rank_of = |p: &Photo| rank.get(&p.id).copied().unwrap_or(usize::MAX);
         v.sort_by(|a, b| {
             let o = match sort.key {
                 SortKey::CaptureDate => a.captured.cmp(&b.captured).then_with(|| a.imported.cmp(&b.imported)),
@@ -373,6 +380,8 @@ impl Catalog {
                 SortKey::Rating => a.rating.cmp(&b.rating),
                 SortKey::FileSize => a.file_size.cmp(&b.file_size),
                 SortKey::Random => shuffle_rank(sort.seed, a.id).cmp(&shuffle_rank(sort.seed, b.id)),
+                // (reversed below for the default descending sort: best first, then by id)
+                SortKey::Relevance => rank_of(b).cmp(&rank_of(a)).then(b.id.cmp(&a.id)),
             }
             .then(a.id.cmp(&b.id));
             if sort.ascending { o } else { o.reverse() }

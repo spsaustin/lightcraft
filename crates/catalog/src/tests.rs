@@ -450,6 +450,28 @@ fn random_sort_direction_reverses_and_serde_defaults_hold() {
     assert_eq!(serde_json::from_str::<Sort>(r#"{"key":"random","seed":9}"#).unwrap(), Sort { key: SortKey::Random, seed: 9, ..Default::default() });
 }
 
+/// `SortKey::Relevance` (a search's ranking): the order of `only`, unlisted photos last, ties by id; ascending
+/// reverses it; the key round-trips as `relevance`.
+#[test]
+fn relevance_sort_query_follows_the_only_order() {
+    let mut c = Catalog::new();
+    let ids = many(&mut c, 6);
+    let rel = Sort { key: SortKey::Relevance, ..Default::default() };
+    let f = Filter { only: vec![ids[4], ids[1], ids[3]], ..Default::default() };
+    assert_eq!(c.query(&f, &rel), vec![ids[4], ids[1], ids[3]]);
+    let mut asc = c.query(&f, &Sort { ascending: true, ..rel });
+    asc.reverse();
+    assert_eq!(asc, vec![ids[4], ids[1], ids[3]]);
+    // no ranking: id order (every photo is unlisted)
+    assert_eq!(c.query(&Filter::default(), &rel), ids);
+    // a listed id twice keeps its first place
+    let f = Filter { only: vec![ids[2], ids[0], ids[2]], ..Default::default() };
+    assert_eq!(c.query(&f, &rel), vec![ids[2], ids[0]]);
+    assert_eq!(serde_json::to_value(SortKey::Relevance).unwrap(), serde_json::json!("relevance"));
+    assert_eq!(serde_json::from_str::<Sort>(r#"{"key":"relevance"}"#).unwrap().key, SortKey::Relevance);
+    assert!(c.date_runs(&ids, SortKey::Relevance, GroupBy::Day).is_empty());
+}
+
 #[test]
 fn random_sort_has_no_date_headers() {
     let mut c = Catalog::new();

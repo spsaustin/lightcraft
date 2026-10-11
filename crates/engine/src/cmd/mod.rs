@@ -33,6 +33,7 @@ mod preset_files;
 pub mod previews;
 mod query;
 mod sync;
+mod ver;
 mod xmp;
 
 use serde::Serialize;
@@ -156,6 +157,8 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(face_detect::specs());
         v.extend(face_recognize::specs());
         v.extend(activity::specs());
+        v.extend(crate::vera::commands::specs());
+        v.extend(ver::specs());
         v
     })
 }

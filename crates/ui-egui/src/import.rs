@@ -85,6 +85,9 @@ pub struct ImportDialog {
     pub trashed: Vec<bool>,
     /// What to do with those: "" (leave them), `restore` or `fresh` (the `onDeleted` param).
     pub on_deleted: String,
+    /// Files that are the same picture as a library photo (`nearDuplicate` tier `picture`): `stack` ("", the
+    /// default), `import` or `skip` (the `onNearDuplicate` param).
+    pub on_near_duplicate: String,
     /// The candidate clicked last: where a Shift-click range starts ([`ImportDialog::click`]).
     #[serde(skip)]
     pub last_clicked: Option<usize>,
@@ -113,6 +116,61 @@ impl ImportDialog {
     }
     pub fn importable(&self, i: usize) -> bool {
         self.candidates.get(i).is_some_and(|c| c.error.is_none() && (c.duplicate.is_none() || self.is_trashed(i) && !self.on_deleted.is_empty()))
+            && !(self.is_same_picture(i) && self.on_near_duplicate == "skip")
+    }
+    /// Candidate `i` is the same picture as a library photo (a resize, a re-export), by fingerprint.
+    pub fn is_same_picture(&self, i: usize) -> bool {
+        self.candidates.get(i).and_then(|c| c.near_duplicate.as_ref()).is_some_and(|n| n.tier == "picture")
+    }
+    /// Choose what the import does with the same pictures (`stack`, `import` or `skip`); with Skip they are
+    /// unchecked (they will not import), and checked again when another choice brings them back.
+    pub fn set_on_near_duplicate(&mut self, choice: &str) {
+        let choice = if choice == "stack" { "" } else { choice };
+        let changed = (self.on_near_duplicate == "skip") != (choice == "skip");
+        self.on_near_duplicate = choice.to_string();
+        for i in (0..self.candidates.len()).filter(|_| changed) {
+            if self.is_same_picture(i) {
+                let on = self.importable(i);
+                if let Some(c) = self.checked.get_mut(i) {
+                    *c = on;
+                }
+            }
+        }
+    }
+    /// The `library.import` params for the checked files' options (the album, created when the import starts, aside).
+    pub fn import_params(&self) -> Result<Value, String> {
+        let mode = match (self.copy, self.move_files) {
+            (false, _) => "add",
+            (true, false) => "copy",
+            (true, true) => "move",
+        };
+        let mut params = json!({"mode": mode, "keywords": self.keywords()});
+        if !self.on_deleted.is_empty() {
+            params["onDeleted"] = json!(self.on_deleted);
+        }
+        params["onNearDuplicate"] = json!(if self.on_near_duplicate.is_empty() { "stack" } else { self.on_near_duplicate.as_str() });
+        if !self.preset.is_empty() {
+            params["preset"] = json!(self.preset);
+        }
+        if !self.metadata_preset.is_empty() {
+            params["metadataPreset"] = json!(self.metadata_preset);
+        }
+        if self.copy {
+            if !self.destination.trim().is_empty() {
+                params["destination"] = json!(self.destination.trim());
+            }
+            if let Some(o) = self.organize_param()? {
+                params["organize"] = json!(o);
+            }
+            if !self.rename.trim().is_empty() {
+                params["rename"] = json!(self.rename.trim());
+                params["renameStart"] = json!(1);
+            }
+            if self.dng && !self.move_files {
+                params["dng"] = json!(true);
+            }
+        }
+        Ok(params)
     }
     /// The file types among the candidates (`ARW`, `JPG`…, upper case, sorted) and how many of each.
     pub fn file_types(&self) -> Vec<(String, usize)> {
@@ -218,6 +276,8 @@ pub struct ImportTask {
     /// Brought back from Recently Deleted (`onDeleted: restore`).
     pub restored: usize,
     pub duplicates: usize,
+    /// Imported and stacked under the library photo they are the same picture as (`onNearDuplicate: stack`).
+    pub stacked: usize,
     /// The library photos the skipped duplicates match (shown when nothing new was added).
     existing: Vec<u64>,
     pub failed: usize,
@@ -552,6 +612,7 @@ pub fn poll_scan(app: &mut LightcraftApp, ctx: &egui::Context) {
         .collect();
     d.copy = task.copy;
     d.sources = task.sources;
+    d.set_on_near_duplicate(&app.ui.import_near_duplicate);
     app.ui.dialog = Some(crate::state::Dialog::Import { opts: Box::new(d) });
 }
 
@@ -570,44 +631,18 @@ pub fn start(app: &mut LightcraftApp, d: &ImportDialog) -> Result<Value, String>
         return Err("no photos selected".into());
     }
     let undo0 = app.session.undo.len();
+    // checked before the album is created: a bad folder template must not leave an empty album behind
+    let mut params = d.import_params()?;
     let mut album = d.album;
     if album.is_none() && !d.new_album.trim().is_empty() {
         let r = app.session.execute("album.create", &json!({"name": d.new_album.trim()})).map_err(|e| e.to_string())?;
         album = r["id"].as_u64();
     }
-    let mode = match (d.copy, d.move_files) {
-        (false, _) => "add",
-        (true, false) => "copy",
-        (true, true) => "move",
-    };
-    let mut params = json!({"mode": mode, "keywords": d.keywords()});
-    if !d.on_deleted.is_empty() {
-        params["onDeleted"] = json!(d.on_deleted);
-    }
     if let Some(a) = album {
         params["album"] = json!(a);
     }
-    if !d.preset.is_empty() {
-        params["preset"] = json!(d.preset);
-    }
-    if !d.metadata_preset.is_empty() {
-        params["metadataPreset"] = json!(d.metadata_preset);
-    }
-    if d.copy {
-        if !d.destination.trim().is_empty() {
-            params["destination"] = json!(d.destination.trim());
-        }
-        if let Some(o) = d.organize_param()? {
-            params["organize"] = json!(o);
-        }
-        if !d.rename.trim().is_empty() {
-            params["rename"] = json!(d.rename.trim());
-            params["renameStart"] = json!(1);
-        }
-        if d.dng && !d.move_files {
-            params["dng"] = json!(true);
-        }
-    }
+    // the choice for the same pictures holds for the rest of the session
+    app.ui.import_near_duplicate = d.on_near_duplicate.clone();
     let total = queue.len();
     app.import = Some(ImportTask::new(queue, params, undo0, false));
     app.renderer.forget_imports();
@@ -701,6 +736,7 @@ fn commit_batch(app: &mut LightcraftApp, task: &mut ImportTask, prepared: lightc
             task.imported += len("imported");
             task.restored += len("restored");
             task.duplicates += len("duplicates");
+            task.stacked += len("stacked");
             task.existing.extend(v["duplicates"].as_array().into_iter().flatten().filter_map(|d| d["existing"].as_u64()));
             task.failed += len("failed");
             task.moved += len("moved");
@@ -746,12 +782,19 @@ fn finish(app: &mut LightcraftApp, ctx: &egui::Context, task: ImportTask) {
     if let Some(f) = task.first {
         let _ = app.run("library.select", json!({"ids": [f]}));
     }
-    let plural = |n: usize| if n == 1 { "" } else { "s" };
     // nothing new, only files the library already has: show where they are (Recently Deleted is
     // easy to miss, and the side panel that lists it starts collapsed)
     if task.imported == 0 && task.restored == 0 && task.failed == 0 && !task.cancelled && show_existing(app, ctx, &task.existing) {
         return;
     }
+    let deleted = if task.duplicates > 0 { deleted_of(app, &task.existing).len() } else { 0 };
+    app.toast(ctx, summary(&task, deleted));
+}
+
+/// What a finished import says: how many photos it added, and what happened to the others (`deleted`: how many of
+/// the library photos the skipped duplicates match are in Recently Deleted).
+fn summary(task: &ImportTask, deleted: usize) -> String {
+    let plural = |n: usize| if n == 1 { "" } else { "s" };
     let mut msg = if task.cancelled {
         crate::i18n::tr_format!("Import cancelled · {} photo{} added", task.imported, plural(task.imported))
     } else {
@@ -759,6 +802,11 @@ fn finish(app: &mut LightcraftApp, ctx: &egui::Context, task: ImportTask) {
     };
     if task.restored > 0 {
         msg.push_str(&crate::i18n::tr_format!(" · {} restored from Recently Deleted", task.restored));
+    }
+    if task.stacked == 1 {
+        msg.push_str(crate::i18n::tr(" · 1 stacked under its original"));
+    } else if task.stacked > 1 {
+        msg.push_str(&crate::i18n::tr_format!(" · {stacked} stacked under their originals", stacked = task.stacked));
     }
     if task.params["mode"] == "move" {
         msg.push_str(&crate::i18n::tr_format!(" · {} moved", task.moved));
@@ -768,7 +816,6 @@ fn finish(app: &mut LightcraftApp, ctx: &egui::Context, task: ImportTask) {
     }
     if task.duplicates > 0 {
         msg.push_str(&crate::i18n::tr_format!(" · {} duplicate{} skipped", task.duplicates, if task.duplicates == 1 { "" } else { "s" }));
-        let deleted = deleted_of(app, &task.existing).len();
         if deleted > 0 {
             msg.push_str(&crate::i18n::tr_format!(" ({} in Recently Deleted)", deleted));
         }
@@ -776,7 +823,7 @@ fn finish(app: &mut LightcraftApp, ctx: &egui::Context, task: ImportTask) {
     if task.failed > 0 {
         msg.push_str(&crate::i18n::tr_format!(" · {} not readable", task.failed));
     }
-    app.toast(ctx, msg);
+    msg
 }
 
 /// The photos among `ids` that are in Recently Deleted (each once).
@@ -1065,6 +1112,35 @@ pub fn body(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &mut ImportDialog) {
             );
         });
     }
+    let same = (0..d.candidates.len()).filter(|i| d.is_same_picture(*i)).count();
+    if same > 0 {
+        field(ui, "Same pictures", |ui| {
+            let opts = [("stack", "Stack under the original"), ("import", "Import anyway"), ("skip", "Skip")];
+            let key = if d.on_near_duplicate.is_empty() { "stack" } else { d.on_near_duplicate.as_str() };
+            let cur = opts.iter().find(|o| o.0 == key).map_or(opts[0].1, |o| o.1);
+            let mut pick = None;
+            let combo = egui::ComboBox::from_id_salt("import-near-duplicate").selected_text(crate::i18n::tr(cur)).show_ui(ui, |ui| {
+                for (k, label) in opts {
+                    let r = ui.selectable_label(key == k, crate::i18n::tr(label));
+                    register(ui.ctx(), format!("button:importNearDuplicate-{k}"), r.rect);
+                    if r.clicked() {
+                        pick = Some(k);
+                    }
+                }
+            });
+            register(ui.ctx(), "combo:importNearDuplicate", combo.response.rect);
+            if let Some(k) = pick {
+                d.set_on_near_duplicate(k);
+                app.ui.import_near_duplicate = d.on_near_duplicate.clone();
+            }
+            let t = Tokens::get(ui.ctx());
+            ui.label(
+                egui::RichText::new(crate::i18n::tr_format!("{same} found: resizes or re-exports of photos in the library", same = same))
+                    .color(t.text_dim)
+                    .small(),
+            );
+        });
+    }
     let albums: Vec<(u64, String)> = {
         let mut v: Vec<(u64, String)> =
             app.session.catalog.albums().filter(|a| !a.folder && !a.is_smart()).map(|a| (a.id.0, a.name.clone())).collect();
@@ -1187,30 +1263,61 @@ fn candidate_cell(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &mut ImportDial
         (Some(r), _) if r == "path" => Some("In library"),
         (Some(_), _) => Some("Duplicate"),
         (None, Some(_)) => Some("Unreadable"),
-        _ => None,
+        _ => near_badge(&c),
     };
     if let Some(b) = badge {
         let g = p.layout_no_wrap(crate::i18n::tr(b).to_string(), t.semibold(10.0), Color32::WHITE);
         let br = Rect::from_min_size(pos2(img.right() - g.size().x - 12.0, img.top() + 6.0), g.size() + vec2(8.0, 4.0));
-        p.rect_filled(br, 3.0, Color32::from_rgba_unmultiplied(170, 60, 50, 220));
+        // a possible match is only a hint: a quieter badge than the files that will not import as new
+        let fill = if b == "Possibly the same" {
+            Color32::from_rgba_unmultiplied(150, 110, 40, 220)
+        } else {
+            Color32::from_rgba_unmultiplied(170, 60, 50, 220)
+        };
+        p.rect_filled(br, 3.0, fill);
         p.galley(br.min + vec2(4.0, 2.0), g, Color32::WHITE);
+        register(ui.ctx(), format!("import:{i}:badge"), br);
     }
     let name = if c.name.chars().count() > 18 { format!("{}…", c.name.chars().take(17).collect::<String>()) } else { c.name.clone() };
     p.text(pos2(rect.left() + 2.0, img.bottom() + 9.0), Align2::LEFT_CENTER, name, t.font(10.5), if ok { t.text_label } else { t.text_dim });
+    let matched =
+        c.near_duplicate.as_ref().and_then(|n| app.session.catalog.photo(lightcraft_catalog::PhotoId(n.existing))).map(|p| p.file_name.clone());
     let tip = format!(
-        "{}\n{} × {} · {} · {:.1} MB{}",
+        "{}\n{} × {} · {} · {:.1} MB{}{}",
         c.path,
         c.width,
         c.height,
         c.format,
         c.file_size as f64 / 1e6,
-        c.captured.as_deref().map(|d| format!("\n{}", d.replace('T', " "))).unwrap_or_default()
+        c.captured.as_deref().map(|d| format!("\n{}", d.replace('T', " "))).unwrap_or_default(),
+        near_note(&c, matched.as_deref()).map(|n| format!("\n{n}")).unwrap_or_default()
     );
     let resp = resp.on_hover_text(tip);
     if resp.clicked() && ok {
         let shift = ui.input(|input| input.modifiers.shift);
         d.click(i, shift);
     }
+}
+
+/// The badge of a file that looks like a library photo (by fingerprint): "Same picture" or "Possibly the same".
+pub(crate) fn near_badge(c: &ImportCandidate) -> Option<&'static str> {
+    match c.near_duplicate.as_ref()?.tier.as_str() {
+        "picture" => Some("Same picture"),
+        "possible" => Some("Possibly the same"),
+        _ => None,
+    }
+}
+
+/// The tooltip line of such a file: the library photo it matches (`matched`: its file name) and how far apart the two
+/// fingerprints are.
+pub(crate) fn near_note(c: &ImportCandidate, matched: Option<&str>) -> Option<String> {
+    let n = c.near_duplicate.as_ref()?;
+    let name = matched.map_or_else(|| format!("#{}", n.existing), str::to_string);
+    let distances = crate::i18n::tr_format!("PDQ {pdq} of 256 bits apart, pHash {phash} of 64", pdq = n.pdq, phash = n.phash);
+    Some(match n.tier.as_str() {
+        "picture" => crate::i18n::tr_format!("The same picture as {name} in the library ({distances})", name = name, distances = distances),
+        _ => crate::i18n::tr_format!("Possibly the same picture as {name} in the library ({distances})", name = name, distances = distances),
+    })
 }
 
 /// Reserve the actual translated tag button width beside a template field.
@@ -1486,5 +1593,124 @@ mod tests {
         d.last_clicked = Some(99);
         d.click(2, true);
         assert_eq!(d.checked, [true, true, false, false, true, true]);
+    }
+
+    /// Four files: a plain one, the same picture as library photo 7, possibly the same as photo 8, and a byte duplicate.
+    fn near_dialog() -> ImportDialog {
+        use lightcraft_engine::import::NearDuplicate;
+        let mut candidates: Vec<ImportCandidate> = (0..4).map(|i| ImportCandidate { path: format!("img{i}.jpg"), ..Default::default() }).collect();
+        candidates[1].near_duplicate = Some(NearDuplicate { existing: 7, tier: "picture".into(), pdq: 12, phash: 2 });
+        candidates[2].near_duplicate = Some(NearDuplicate { existing: 8, tier: "possible".into(), pdq: 48, phash: 10 });
+        candidates[3].duplicate = Some("content".into());
+        ImportDialog::new(candidates)
+    }
+
+    /// A file that is the same picture as a library photo (by fingerprint) is badged and stays checked: it imports and
+    /// is stacked under the original unless Skip is chosen. A possible match is badged and nothing more.
+    #[test]
+    fn near_duplicates_are_badged_and_their_choice_goes_to_the_import() {
+        let mut d = near_dialog();
+        let badges: Vec<Option<&str>> = d.candidates.iter().map(near_badge).collect();
+        assert_eq!(badges, [None, Some("Same picture"), Some("Possibly the same"), None]);
+        let note = near_note(&d.candidates[1], Some("IMG_0042.JPG")).unwrap_or_default();
+        assert_eq!(note, "The same picture as IMG_0042.JPG in the library (PDQ 12 of 256 bits apart, pHash 2 of 64)");
+        let note = near_note(&d.candidates[2], None).unwrap_or_default();
+        assert_eq!(note, "Possibly the same picture as #8 in the library (PDQ 48 of 256 bits apart, pHash 10 of 64)");
+        assert_eq!(near_note(&d.candidates[0], None), None);
+        // checked: the plain file and both matches; the byte duplicate is left out as before
+        assert_eq!(d.checked, [true, true, true, false]);
+        assert_eq!(d.selected_paths(), ["img0.jpg", "img1.jpg", "img2.jpg"]);
+        assert_eq!(d.import_params().unwrap()["onNearDuplicate"], "stack", "stacked by default");
+        // Skip: the same picture is unchecked and can't be checked; the possible match is not affected
+        d.set_on_near_duplicate("skip");
+        assert_eq!(d.checked, [true, false, true, false]);
+        d.click(1, false);
+        assert_eq!(d.selected_paths(), ["img0.jpg", "img2.jpg"]);
+        assert_eq!(d.import_params().unwrap()["onNearDuplicate"], "skip");
+        // Import anyway: back in
+        d.set_on_near_duplicate("import");
+        assert_eq!(d.checked, [true, true, true, false]);
+        assert_eq!(d.import_params().unwrap()["onNearDuplicate"], "import");
+        // a file the user unchecked stays unchecked when switching between stack and import
+        d.click(1, false);
+        d.set_on_near_duplicate("stack");
+        assert_eq!((d.checked[1], d.on_near_duplicate.as_str()), (false, ""));
+        assert_eq!(d.import_params().unwrap()["onNearDuplicate"], "stack");
+    }
+
+    /// The import started from the dialog carries the choice to `library.import`, and the app keeps it for the next
+    /// review in the session.
+    #[test]
+    fn the_same_picture_choice_reaches_the_import_and_is_remembered() {
+        let services = crate::Services { png: None, ..Default::default() };
+        let mut app = LightcraftApp::new(lightcraft_engine::Session::new(), services);
+        let mut d = near_dialog();
+        d.set_on_near_duplicate("skip");
+        start(&mut app, &d).unwrap();
+        let task = app.import.as_ref().expect("an import");
+        assert_eq!(task.params["onNearDuplicate"], "skip");
+        assert_eq!(task.queue, ["img0.jpg", "img2.jpg"]);
+        assert_eq!(app.ui.import_near_duplicate, "skip");
+        // the next review starts from it
+        let mut next = near_dialog();
+        next.set_on_near_duplicate(&app.ui.import_near_duplicate);
+        assert_eq!((next.on_near_duplicate.as_str(), next.checked[1]), ("skip", false));
+    }
+
+    /// The message after an import counts the photos stacked under their originals.
+    #[test]
+    fn the_import_message_counts_the_stacked_duplicates() {
+        let task = ImportTask { imported: 5, stacked: 3, ..ImportTask::new(vec![], json!({"mode": "add"}), 0, false) };
+        assert_eq!(summary(&task, 0), "Imported 5 photos · 3 stacked under their originals");
+        let task = ImportTask { imported: 2, stacked: 1, duplicates: 1, ..ImportTask::new(vec![], json!({"mode": "add"}), 0, false) };
+        assert_eq!(summary(&task, 0), "Imported 2 photos · 1 stacked under its original · 1 duplicate skipped");
+        let task = ImportTask { imported: 2, ..ImportTask::new(vec![], json!({"mode": "add"}), 0, false) };
+        assert_eq!(summary(&task, 0), "Imported 2 photos");
+    }
+
+    /// The review paints the badges, and offers the choice only when some file is the same picture as a library photo;
+    /// picking Skip there is remembered for the session.
+    #[test]
+    fn the_review_shows_the_badges_and_the_same_pictures_option() {
+        use std::time::Duration;
+        let services = crate::Services { png: None, ..Default::default() };
+        let app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), services);
+        let mut h = crate::headless::Headless::new(app, [1400.0, 1000.0], 1.0);
+        h.settle(Duration::from_secs(60));
+        let existing = h.app.session.visible_cloned()[0];
+        let name = h.app.session.catalog.photo(existing).map(|p| p.file_name.clone()).unwrap_or_default();
+        let mut d = near_dialog();
+        if let Some(n) = d.candidates[1].near_duplicate.as_mut() {
+            n.existing = existing.0;
+        }
+        h.app.ui.dialog = Some(crate::state::Dialog::Import { opts: Box::new(d) });
+        h.settle(Duration::from_secs(60));
+        let text = h.painted_text();
+        for s in [
+            "Same picture",
+            "Possibly the same",
+            "Same pictures",
+            "Stack under the original",
+            "1 found: resizes or re-exports of photos in the library",
+        ] {
+            assert!(text.iter().any(|t| t == s), "{s:?} not painted: {text:?}");
+        }
+        assert!(h.app.widgets.iter().any(|(w, _)| w == "import:1:badge"));
+        let ask = |h: &mut crate::headless::Headless, method: &str, params: Value| {
+            let r = h.request(method, params, Duration::from_secs(30));
+            assert_eq!(r["ok"], true, "{r}");
+            h.settle(Duration::from_secs(60));
+        };
+        // the tooltip names the library photo
+        ask(&mut h, "ui.hoverWidget", json!({"id": "import:1"}));
+        h.step_until(Duration::from_secs(10), |h| h.painted_text().iter().any(|t| t.contains("The same picture as")));
+        assert!(h.painted_text().iter().any(|t| t.contains(&format!("The same picture as {name} in the library"))), "{:?}", h.painted_text());
+        ask(&mut h, "ui.clickWidget", json!({"id": "combo:importNearDuplicate"}));
+        ask(&mut h, "ui.clickWidget", json!({"id": "button:importNearDuplicate-skip"}));
+        assert_eq!(h.app.ui.import_near_duplicate, "skip");
+        match &h.app.ui.dialog {
+            Some(crate::state::Dialog::Import { opts }) => assert_eq!((opts.on_near_duplicate.as_str(), opts.checked[1]), ("skip", false)),
+            other => panic!("the review closed: {other:?}"),
+        }
     }
 }

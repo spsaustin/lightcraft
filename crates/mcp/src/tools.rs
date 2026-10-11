@@ -148,9 +148,146 @@ pub fn helper_tools(has_ui: bool) -> Vec<Value> {
                 "destination": {"type": "string", "description": "Copy or move: destination folder"},
                 "organize": {"type": "string", "description": "Copy or move: folders inside the destination — date (YYYY/YYYY-MM-DD, default), month (YYYY/YYYY-MM), flat, or a folder template such as {date:%Y}/{date:%Y%m%d} (→ 2026/20260114; the template's / make the levels, tokens as for rename; relative, no ..). Dated by capture time, else the import time"},
                 "onDeleted": {"type": "string", "enum": ["skip", "restore", "fresh"], "description": "A file that is in Recently Deleted: skip (default) = leave it there (the duplicate is reported with existingDeleted); restore = bring the photo back with its edits (`restored` lists it); fresh = delete the trashed record and import the file as a new photo"},
-                "rename": {"type": "string", "description": "Copy or move: file-name template, e.g. {date:%Y%m%d_%H%M%S}_{seq:3} (run_command photo.renameTokens lists the tags); the extension is kept"}
+                "rename": {"type": "string", "description": "Copy or move: file-name template, e.g. {date:%Y%m%d_%H%M%S}_{seq:3} (run_command photo.renameTokens lists the tags); the extension is kept"},
+                "onNearDuplicate": {"type": "string", "enum": ["stack", "import", "skip"], "description": "A file the import review found to be the same picture as a library photo (a resize, a re-export): stack (default) = import it and stack it under that photo (`stacked` lists them); import = import it like any other; skip = leave it out (listed in `duplicates` with reason `picture`). Only files reviewed first (library.importPreview) are checked"}
             }),
             &["paths"],
+        ),
+        tool(
+            "search_text",
+            "Search photos by words",
+            "Search the library by words, best match first. The keyword lane matches title, keywords (every level), caption, alt text, description, file name, camera, lens and place, with prefix matching (each word is a prefix; any word may match). Each result row carries `lane` (which lane found the photo) and the result carries `cutoff` (the noise ceiling applied; null for the keyword lane), so you can explain why a photo is listed. Rows also carry `cosine` (the embedding model's similarity) and `keywordScore` where the lane that found the photo has one, and the result carries `warning` when the vector lane could not run (the keyword results are still returned; `vera_model` says how to enable it). With `filter` (default true) the library view is also filtered to the results in rank order (sort: relevance; clear the filter to go back); a search that finds nothing leaves the view alone. Returns {photos: [{id, score, lane: keyword | vector | both, cosine?, keywordScore?}], cutoff, lanes, filtered, warning?}.",
+            json!({
+                "query": {"type": "string", "description": "Words to look for (at most 2000 characters)"},
+                "limit": {"type": "integer", "description": "Most results to return (default 200, max 10000)"},
+                "filter": {"type": "boolean", "description": "Also filter the library view to the results in rank order (default true)"}
+            }),
+            &["query"],
+        ),
+        tool(
+            "photo_duplicates",
+            "Find the same picture",
+            "Find the photos that are the same picture as one photo, in three tiers: `bytes` (the same file content), `picture` (the same picture by fingerprint: a resize, a re-export) and `possible` (a variant edit, a burst neighbour). Each row carries `pdq` (differing bits of 256) and `phash` (of 64). Virtual copies, and pairs the user set apart with photo.ignorePair, are left out. `pendingDigests` says how many photos are not fingerprinted yet (they cannot be compared until they are). Returns {id, photos: [{id, tier, pdq, phash}], ignored, digested, pendingDigests}, rows by tier then distance. With `filter` the library view shows the photo and its duplicates.",
+            json!({
+                "id": {"type": "integer", "description": "Photo id (default: the active photo)"},
+                "limit": {"type": "integer", "description": "Most rows to return (default 50, max 10000)"},
+                "filter": {"type": "boolean", "description": "Also filter the library view to the photo and its duplicates (default false)"}
+            }),
+            &[],
+        ),
+        tool(
+            "vera_status",
+            "Search and duplicate lanes",
+            "Which search and duplicate lanes are live: `keyword`, `digest`, `vector` and `describe`, each with a reason when it is not running, plus the fingerprint counts (digested, photos, pendingDigests, unreadable, digests, indexDocs, ignoredPairs) and the sidecar file. The `vector` lane (search by meaning) reports a state: `live`, `needs_model` (the model is not downloaded; see `vera_model`), `downloading`, `disabled_by_user`, `needs_desktop` (the web build) or `error`, with a reason; the counts include `embedded` and `pendingEmbeddings`, and `spaceBackground` ({mean, sigma, pictures}, or null) is a diagnostic: the mean similarity of random pairs of this library's pictures, which queries are cut against (a mean drifting towards 1 means the pictures all look alike to the model). `model` says whether the model is installed and loaded. The `describe` lane (proposing titles, captions and keywords) reports a state too: `live`, `needs_endpoint` or `needs_token` (see `vera_describe_config`), `needs_desktop` (the web build) or `error`, with a reason and the `host` photos are sent to. Check this before explaining a search, duplicate or describe result.",
+            json!({}),
+            &[],
+        ),
+        tool(
+            "photo_similar",
+            "Find photos that look alike",
+            "Find the photos that look like one photo, by the embedding model's cosine similarity, best first. Only photos above this query's noise ceiling (`cutoff`) are listed, and the ceiling is capped so a near duplicate is never cut. Needs the search-by-meaning model: without it this is an error saying the vector lane is \"not ready\" (`vera_model` says why and how to get it). `pendingEmbeddings` counts the photos not embedded yet; they cannot appear until they are. Returns {id, photos: [{id, cosine, lane}], cutoff, embedded, pendingEmbeddings, filtered}. With `filter` (default true) the library view shows the photo and the results in rank order (clear the filter to go back).",
+            json!({
+                "id": {"type": "integer", "description": "Photo id (default: the active photo)"},
+                "limit": {"type": "integer", "description": "Most rows to return (default 50, max 10000)"},
+                "filter": {"type": "boolean", "description": "Also filter the library view to the photo and its look-alikes (default true)"}
+            }),
+            &[],
+        ),
+        tool(
+            "vera_model",
+            "The search-by-meaning model",
+            "Manage the model behind finding photos by meaning (SigLIP 2). `action`: `status` (default; read-only) returns {installed, state, loaded, bytes, dir?, downloading?, downloadError?, licence: {name, url, notice}}; `download` fetches it in the background; `cancel` stops a download (what arrived is kept and resumed); `remove` deletes the model's weights AND this library's embedding sidecar (searching by meaning stops until it is downloaded again); `config` with `vectorLane` switches the vector lane on or off for this library (the vectors made so far stay). The download is 1.5 GB from Hugging Face under the Apache License 2.0 and starts ONLY with `acceptLicense: true`, after the licence notice (`status` returns it as `licence.notice` and `licence.url`) has been shown to the user; without it the call is refused. Because one tool carries both a read-only action and writing ones, it is annotated as destructive and not read-only; use `status` freely.",
+            json!({
+                "action": {"type": "string", "enum": ["status", "download", "cancel", "remove", "config"], "description": "What to do (default status)"},
+                "acceptLicense": {"type": "boolean", "description": "download only: true once the user has been shown the licence notice and accepted it"},
+                "vectorLane": {"type": "boolean", "description": "config only: switch the vector lane (search by meaning) on or off for this library"}
+            }),
+            &[],
+        ),
+        tool(
+            "vera_describe_config",
+            "Where Describe sends photos",
+            "Set where Describe sends photos: an OpenAI-compatible chat-completions endpoint (llama.cpp, Ollama, vLLM and LM Studio all serve one). Plain http is allowed only to this computer (127.0.0.1 / localhost); any other host needs https AND `allowRemoteHost: true`, given only after the user has agreed that preview-sized copies of the photos they choose are sent there. The token is stored on this computer (a 0600 file) and is write-only: the result never includes it, `tokenSet` says whether one exists, and error messages never repeat it. `null` clears a value; a field left out is unchanged, so an empty call just reads the settings. Returns {endpoint, model, allowRemoteHost, tokenSet, state, reason}. It writes settings (and a secret) but nothing in the catalog or any photo.",
+            json!({
+                "endpoint": {"type": ["string", "null"], "description": "Base URL of the endpoint, e.g. http://127.0.0.1:8080 or https://vlm.example.com/v1; null clears it"},
+                "model": {"type": ["string", "null"], "description": "Model name the endpoint expects; null clears it"},
+                "allowRemoteHost": {"type": "boolean", "description": "true only once the user agreed that preview-sized copies of chosen photos are sent to a host other than this computer"},
+                "token": {"type": ["string", "null"], "description": "Bearer token for the endpoint; write-only (never returned); null clears it"}
+            }),
+            &[],
+        ),
+        tool(
+            "photo_describe",
+            "Propose title, caption, alt text and keywords",
+            "Propose a title, caption, alt text and keywords for photos. Proposals go to a review queue: nothing is written to a photo until `describe_review` accepts. Without `ids`, the selected photos are described. With `keywordsOnly: true` no endpoint is needed: the keywords come from SigLIP 2 zero-shot over LightCraft's own vocabulary, on this computer (it needs the search-by-meaning model; see `vera_model`). Otherwise photos are sent as preview-sized copies to the endpoint of `vera_describe_config`. The work runs in the background as an activity (`activity.list`) and results arrive as the app pumps: poll `describe_review {action: \"list\"}`. Returns {queued, already, skipped, keywordsOnly, host?, model?}.",
+            json!({
+                "ids": {"type": "array", "items": {"type": "integer"}, "description": "Photo ids (default: the selection)"},
+                "keywordsOnly": {"type": "boolean", "description": "Only propose keywords, from the local model; no endpoint is used (default false)"}
+            }),
+            &[],
+        ),
+        tool(
+            "describe_review",
+            "Review proposed descriptions",
+            "Review what `photo_describe` proposed. `action`: `list` (default; read-only) returns {proposals, total, pending, inFlight, failed}, each proposal with its fields, source and the photo's current values; `accept` (needs `id`) writes the proposal to the photo as ONE undoable `photo.setMeta` with `Describe` provenance per field, optionally only some `fields`, optionally with `edits` ({field: text}) instead of the proposed text; keywords are merged with the photo's own unless `replaceKeywords` is true; `reject` (needs `id`) drops one proposal; `clear` drops every proposal. Nothing is written to a photo except by `accept`, and accepted writes can be undone. Because one tool carries a read-only action and writing ones, it is annotated as not read-only, not destructive (undoable) and not idempotent; use `list` freely.",
+            json!({
+                "action": {"type": "string", "enum": ["list", "accept", "reject", "clear"], "description": "What to do (default list)"},
+                "id": {"type": "integer", "description": "accept / reject: the photo id of the proposal"},
+                "fields": {"type": "array", "items": {"type": "string"}, "description": "accept: only these fields (title, caption, alt_text, keywords); default all proposed"},
+                "edits": {"type": "object", "additionalProperties": true, "description": "accept: {field: replacement text or keyword list} written instead of the proposed value"},
+                "replaceKeywords": {"type": "boolean", "description": "accept: replace the photo's keywords instead of merging (default false)"},
+                "limit": {"type": "integer", "description": "list: most proposals to return"}
+            }),
+            &[],
+        ),
+        tool(
+            "photo_keywords",
+            "Keywords a photo suggests",
+            "The keywords one photo suggests, zero-shot from the embedding model (SigLIP 2) over the built-in vocabulary, best first, each with its facet, cosine and (once the library has enough embeddings) a calibrated z score. Read-only: nothing is written. Needs the embedding model and the photo embedded (`vera_model` says how to get the model); without them this is an error naming the model. The vocabulary is embedded once (a few minutes on a CPU) and the result says when it is still being prepared: try again shortly. Returns {id, keywords: [{keyword, facet, cosine, z?}], ceiling, calibrated}.",
+            json!({
+                "id": {"type": "integer", "description": "Photo id (default: the active photo)"},
+                "limit": {"type": "integer", "description": "Most keywords to return (default and max 15)"}
+            }),
+            &[],
+        ),
+        tool(
+            "ver_record",
+            "A photo's VER Record",
+            "The photo's VER Record (Visual Embedding Record): its CPNP-1 identity (content_hash, pixel_hash, PDQ and pHash over the Canonical Buffer), its metadata segments byte-exact, the reconciled IPTC view with a trust tier per field, its acquisition, custody chain and C2PA status, and its canonical visual embedding in LightCraft's own space. Validated against its schema and the VERA profile before it is returned; `issues` lists the warnings (VER404: the space has no reference set, so the vector is comparable only within this producer; VER308: unsigned unless `ver.config {signKeyPath}` is set). Errors say why there is none: `no_cpnp_path` (a camera raw has no Record of its own; its exports do), `needs_model` (the embedding model is not installed; see `vera_model`), `no_asset` (a demo photo has no file). `schema` is \"1.1-draft\" (default) or \"1.0.1\". Read-only. Returns {record, issues, conformant, level, notes, schema}.",
+            json!({
+                "id": {"type": "integer", "description": "Photo id (default: the active photo)"},
+                "schema": {"type": "string", "enum": ["1.1-draft", "1.0.1"], "description": "Record schema (default 1.1-draft)"},
+                "level": {"type": "string", "enum": ["L0", "L1", "L2", "L3"], "description": "Highest conformance level to claim (default L3; the Record claims what its evidence supports)"}
+            }),
+            &[],
+        ),
+        tool(
+            "ver_import",
+            "Read a VER Record",
+            "Read a VER Record from a `.ver.json` file (`path`) or given inline (`record`, an object or its JSON text): it is validated under its own schema (schema + VERA profile), and an error-severity issue rejects it (status `rejected`, nothing matched). An accepted Record is matched against the library: `content` (the same bytes), `pixel_hash` (the same rendered pixels: a grouping, never an identity), `pdq` / `phash` (the same picture perceptually; score = differing bits) and `vector` (only in LightCraft's own space; score = cosine). Read-only: nothing in the library changes. Give exactly one of `path` and `record`. Returns {status, accepted, issues, matches: [{id, by, score}], recordSummary, pendingDigests}.",
+            json!({
+                "path": {"type": "string", "description": "A VER Record file"},
+                "record": {"type": ["object", "string"], "description": "A VER Record, as an object or JSON text"}
+            }),
+            &[],
+        ),
+        tool(
+            "ver_export",
+            "Write VER Records",
+            "Write the VER Records of photos (default: the selection) to the folder `dir`, as <content_hash>.ver.json, with the VER 1.0 twin <content_hash>.ver-1.0.json when `schema` is \"both\" (the default; the two share content_hash). A photo without a Record is listed in `skipped` with its code and reason (a raw: `no_cpnp_path`; no embedding model: `needs_model`). Never writes over a library original. Returns {written, files, skipped: [{id, code, reason}], dir}.",
+            json!({
+                "ids": ids_schema("Photo ids (default: the selection)"),
+                "dir": {"type": "string", "description": "Folder to write the Records into (created if needed)"},
+                "schema": {"type": "string", "enum": ["both", "1.1-draft", "1.0.1"], "description": "Which Records (default both)"}
+            }),
+            &["dir"],
+        ),
+        tool(
+            "ver_status",
+            "Whether VER Records can be made",
+            "Whether this session can produce VER Records and with what: `ready` with `reasons` when not (most often the embedding model is missing: `model.code` is `needs_model`, see `vera_model`), the reverse-DNS `authority` space ids are minted under (default org.verstandard), the `generator`, the `producerId`, `defaultSchema`, `exportSidecars` (whether exports write Records beside their files), `signing` ({enabled, keyId?, error?}), `model` ({ready, spaceId, dim, dtype, producer, weightsSha256}), `lastProduced`, and `claims`: LightCraft's space has no reference set (no conformance claim; vectors comparable only within this producer) and CPNP-1 identity is provisional until a second decoder evaluation is published. Read-only.",
+            json!({}),
+            &[],
         ),
         tool(
             "query_photos",
@@ -363,6 +500,18 @@ pub fn command_tools(backend: &mut dyn Backend) -> Vec<Value> {
 
 /// Conservative hints: generated command tools may edit; optional output paths make a helper a writer.
 fn annotations(name: &str, title: &str) -> Value {
+    // Describe: the config writes a secret and settings but no photo or catalog data (setting the same
+    // values twice changes nothing more); proposing writes nothing to a photo; the review tool mixes a
+    // read-only action with undoable writes; keywords are read-only.
+    match name {
+        "vera_describe_config" => {
+            return json!({"title": title, "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false});
+        }
+        "photo_describe" | "describe_review" => {
+            return json!({"title": title, "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false});
+        }
+        _ => {}
+    }
     let read_only = matches!(
         name,
         "command_list"
@@ -376,10 +525,18 @@ fn annotations(name: &str, title: &str) -> Value {
             | "list_widgets"
             | "ui_inspect"
             | "ui_screenshot"
+            | "vera_status"
+            | "photo_keywords"
+            | "ver_status"
+            | "ver_record"
+            | "ver_import"
     );
-    let files = matches!(name, "export" | "render_photo" | "screenshot");
-    json!({"title": title, "readOnlyHint": read_only, "destructiveHint": !read_only && !files,
-        "idempotentHint": read_only || matches!(name, "render_photo" | "screenshot"), "openWorldHint": false})
+    let files = matches!(name, "export" | "render_photo" | "screenshot" | "ver_export");
+    // Like `select_photos`, these can change the view (their `filter` argument), so they are not
+    // read-only; unlike it they never edit or delete anything, and repeating one changes nothing more.
+    let view = matches!(name, "search_text" | "photo_duplicates" | "photo_similar");
+    json!({"title": title, "readOnlyHint": read_only, "destructiveHint": !read_only && !files && !view,
+        "idempotentHint": read_only || view || matches!(name, "render_photo" | "screenshot"), "openWorldHint": false})
 }
 
 /// Helpers have fixed keys; generated command tools retain the registry's free-form params.
@@ -544,6 +701,91 @@ fn obj(args: &Value, keys: &[&str]) -> Value {
     Value::Object(m)
 }
 
+/// `vera_model`: dispatch `action` to the engine's `vera.model.*` / `vera.config` commands. An unknown
+/// action is refused here, before the engine is called. `acceptLicense` is forwarded only to `download`
+/// (and only as given: the engine refuses a download without `true`), `vectorLane` only to `config`.
+fn vera_model(b: &mut dyn Backend, args: &Value) -> ToolResult {
+    let action = match args.get("action").filter(|v| !v.is_null()) {
+        None => "status",
+        Some(v) => match v.as_str() {
+            Some(a) => a,
+            None => return ToolResult::error("`action` must be one of status, download, cancel, remove, config"),
+        },
+    };
+    let (command, params) = match action {
+        "status" => ("vera.model.status", json!({})),
+        "download" => ("vera.model.download", obj(args, &["acceptLicense"])),
+        "cancel" => ("vera.model.cancel", json!({})),
+        "remove" => ("vera.model.remove", json!({})),
+        "config" => ("vera.config", obj(args, &["vectorLane"])),
+        other => {
+            return ToolResult::error(format!(
+                "unknown action \"{other}\" for vera_model; expected one of: status, download, cancel, remove, config"
+            ));
+        }
+    };
+    ToolResult::from(exec(b, command, params))
+}
+
+/// Replace every occurrence of `secret` in `text` (an error must never repeat a token the caller gave).
+fn scrub(text: String, secret: Option<&str>) -> String {
+    match secret.map(str::trim).filter(|t| !t.is_empty()) {
+        Some(t) => text.replace(t, "[token]"),
+        None => text,
+    }
+}
+
+/// `vera_describe_config`: forward the settings; the token is passed through to the engine, which stores it
+/// and never returns it. Whatever comes back (result or error) is scrubbed of the token we were given.
+fn vera_describe_config(b: &mut dyn Backend, args: &Value) -> ToolResult {
+    let token = args.get("token").and_then(Value::as_str);
+    // unlike `obj`, a `null` is forwarded: it clears the value
+    let params: Map<String, Value> =
+        ["endpoint", "model", "allowRemoteHost", "token"].iter().filter_map(|k| args.get(*k).map(|v| ((*k).to_string(), v.clone()))).collect();
+    match exec(b, "vera.describe.config", Value::Object(params)) {
+        Ok(v) => match token.map(str::trim).filter(|t| !t.is_empty()) {
+            Some(t) => match serde_json::from_str(&v.to_string().replace(t, "[token]")) {
+                Ok(clean) => ToolResult::json(clean),
+                Err(_) => ToolResult::error("the settings were saved; the result was withheld because it repeated the token"),
+            },
+            None => ToolResult::json(v),
+        },
+        Err(e) => ToolResult::error(scrub(e, token)),
+    }
+}
+
+/// `describe_review`: dispatch `action` to `describe.list` / `.accept` / `.reject` / `.clear`. An unknown action,
+/// or accept / reject without a photo `id`, is refused here, before the engine is called.
+fn describe_review(b: &mut dyn Backend, args: &Value) -> ToolResult {
+    const ACTIONS: &str = "list, accept, reject, clear";
+    let action = match args.get("action").filter(|v| !v.is_null()) {
+        None => "list",
+        Some(v) => match v.as_str() {
+            Some(a) => a,
+            None => return ToolResult::error(format!("`action` must be one of {ACTIONS}")),
+        },
+    };
+    let need_id = || match args.get("id").filter(|v| !v.is_null()) {
+        None => Err(ToolResult::error(format!("`id` (the photo id of a proposal) is required for {action}"))),
+        Some(v) if v.as_u64().is_some() => Ok(v.clone()),
+        Some(_) => Err(ToolResult::error("`id` must be a photo id (a whole number)")),
+    };
+    let (command, params) = match action {
+        "list" => ("describe.list", obj(args, &["limit"])),
+        "accept" => match need_id() {
+            Ok(_) => ("describe.accept", obj(args, &["id", "fields", "edits", "replaceKeywords"])),
+            Err(e) => return e,
+        },
+        "reject" => match need_id() {
+            Ok(_) => ("describe.reject", obj(args, &["id"])),
+            Err(e) => return e,
+        },
+        "clear" => ("describe.clear", json!({})),
+        other => return ToolResult::error(format!("unknown action \"{other}\" for describe_review; expected one of: {ACTIONS}")),
+    };
+    ToolResult::from(exec(b, command, params))
+}
+
 /// Run one tool.
 pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> ToolResult {
     let args = if args.is_null() { &json!({}) } else { args };
@@ -632,7 +874,7 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> ToolResult {
                 return ToolResult::error(format!("no photos found in {paths:?}"));
             }
             let mut p = json!({"paths": files});
-            for k in ["album", "mode", "destination", "organize", "rename", "onDeleted"] {
+            for k in ["album", "mode", "destination", "organize", "rename", "onDeleted", "onNearDuplicate"] {
                 if let Some(v) = args.get(k).filter(|v| !v.is_null()) {
                     p[k] = v.clone();
                 }
@@ -644,6 +886,26 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> ToolResult {
                 r
             }))
         }
+        // a `query` of the wrong type is forwarded: the engine says what it must be
+        "search_text" if args.get("query").is_none_or(Value::is_null) => ToolResult::error("missing `query`"),
+        "search_text" => ToolResult::from(exec(b, "search.text", obj(args, &["query", "limit", "filter"]))),
+        "photo_duplicates" => ToolResult::from(exec(b, "photo.duplicates", obj(args, &["id", "limit", "filter"]))),
+        "photo_similar" => ToolResult::from(exec(b, "photo.similar", obj(args, &["id", "limit", "filter"]))),
+        "vera_status" => ToolResult::from(exec(b, "vera.status", json!({}))),
+        "vera_model" => vera_model(b, args),
+        "vera_describe_config" => vera_describe_config(b, args),
+        "photo_describe" => ToolResult::from(exec(b, "photo.describe", obj(args, &["ids", "keywordsOnly"]))),
+        "describe_review" => describe_review(b, args),
+        "photo_keywords" => ToolResult::from(exec(b, "photo.keywords", obj(args, &["id", "limit"]))),
+        "ver_record" => ToolResult::from(exec(b, "ver.record", obj(args, &["id", "schema", "level"]))),
+        "ver_import" => match (args.get("path").filter(|v| !v.is_null()), args.get("record").filter(|v| !v.is_null())) {
+            (Some(_), Some(_)) => ToolResult::error("give `path` or `record`, not both"),
+            (None, None) => ToolResult::error("missing `path` (a .ver.json file) or `record` (a VER Record)"),
+            _ => ToolResult::from(exec(b, "ver.import", obj(args, &["path", "record"]))),
+        },
+        "ver_export" if args.get("dir").is_none_or(Value::is_null) => ToolResult::error("missing `dir`"),
+        "ver_export" => ToolResult::from(exec(b, "ver.export", obj(args, &["ids", "dir", "schema"]))),
+        "ver_status" => ToolResult::from(exec(b, "ver.status", json!({}))),
         "query_photos" => ToolResult::from(exec(b, "catalog.query", obj(args, &["filter", "sort", "offset", "limit"]))),
         "select_photos" => {
             let mut p = obj(args, &["ids", "active", "mode"]);

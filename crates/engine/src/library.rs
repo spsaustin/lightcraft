@@ -49,8 +49,9 @@ pub struct Library {
     /// cached in `thumbs/`.
     pub on_disk: bool,
     journal: Journal,
-    /// presets.json, view.json, prefs.json.
-    files: Box<dyn Store>,
+    /// presets.json, view.json, prefs.json; shared with VERA's sidecar files when the library is not on disk
+    /// ([`crate::vera::sidecar`]: the browser keeps them in the same storage).
+    files: crate::vera::sidecar::SharedStore,
     /// What happened when the catalog was loaded.
     pub report: LoadReport,
     /// Last persistence error (shown by the UI; ops stay pending and are retried).
@@ -124,6 +125,14 @@ impl Library {
     pub fn originals_dir(&self) -> PathBuf {
         self.dir.join("Originals")
     }
+    /// The store holding presets.json, view.json and prefs.json (VERA keeps its sidecars there too when the library is
+    /// not a directory).
+    pub(crate) fn shared_files(&self) -> crate::vera::sidecar::SharedStore {
+        self.files.clone()
+    }
+    fn files(&self) -> std::sync::MutexGuard<'_, Box<dyn Store>> {
+        self.files.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -158,6 +167,13 @@ struct PrefsFile {
     /// Days after which untouched Local records of unbrowsed folders are forgotten (missing =
     /// the default, 0 = never).
     forget_local_days: Option<u32>,
+    /// Search (`vera.config`): whether the vector lane runs for this library; Describe's endpoint
+    /// (`vera.describe.config`, never its token).
+    vera: crate::vera::Prefs,
+    /// VER Records (`ver.config`): the authority, export sidecars, the signing key's path, the default schema and
+    /// the producer id.
+    #[serde(skip_serializing_if = "crate::ver::Prefs::is_default")]
+    ver: crate::ver::Prefs,
 }
 
 fn presets_json(s: &Session) -> String {
@@ -303,6 +319,8 @@ impl Session {
         // what was learned about the old library's faces is saved, and none of it carries over (photo ids are per library)
         #[cfg(not(target_arch = "wasm32"))]
         self.faces.library_changed();
+        // picture digests and ignored pairs belong to the library's folder: saved, then read afresh for the new one
+        self.vera.library_changed();
         let (mut journal, mut catalog, report) = Journal::open(catalog)?;
         // A loaded catalog counts revisions from 0, like every other one. Caches (sidebar counts,
         // keyword tree, the grid's list…) are keyed on the revision, so give each library loaded
@@ -342,6 +360,9 @@ impl Session {
         self.cache_mb = prefs.cache_mb;
         self.forget_local_days = prefs.forget_local_days.unwrap_or(lightcraft_catalog::DEFAULT_FORGET_DAYS);
         self.smart_previews_dir = prefs.smart_previews_dir.filter(|_| on_disk).map(PathBuf::from);
+        self.vera.lane.vector_lane = prefs.vera.vector_lane;
+        self.vera.describe.prefs = prefs.vera.describe;
+        self.ver.library_changed(prefs.ver);
         if let Some(d) = &self.smart_previews_dir {
             self.media.smart_dir = Some(d.clone());
         }
@@ -394,7 +415,7 @@ impl Session {
             dir,
             on_disk,
             journal,
-            files,
+            files: std::sync::Arc::new(std::sync::Mutex::new(files)),
             report,
             last_error: None,
             unsaved_error: None,
@@ -465,7 +486,7 @@ impl Session {
         let presets = presets_json(self);
         let Some(lib) = self.library.as_mut() else { return Ok(()) };
         if presets != lib.presets_written && !lib.blocked.contains(&"presets.json") {
-            if let Err(e) = lib.files.write_atomic("presets.json", presets.as_bytes()) {
+            if let Err(e) = lib.files().write_atomic("presets.json", presets.as_bytes()) {
                 log::error!("library: presets: {e}");
             } else {
                 lib.presets_written = presets;
@@ -505,6 +526,14 @@ impl Session {
         let _ = self.end_interaction();
         let persisted = self.persist();
         self.save_view();
+        // fingerprints and embeddings made since the pump last saved (rebuildable: a failure is only logged)
+        if let Err(e) = self.vera.digests.save() {
+            log::warn!("vera: could not save the picture digests: {e}");
+        }
+        if let Err(e) = self.vera.lane.store.save() {
+            log::warn!("vera: could not save the picture embeddings: {e}");
+        }
+        self.vera.describe.review.save_if_due(true);
         let unlogged = if persisted.is_err() { self.pending_log.len() as u64 } else { 0 };
         let Some(lib) = self.library.as_mut() else { return Ok(()) };
         let before = lib.journal.seq();
@@ -551,7 +580,8 @@ impl Session {
         let v = self.view_json();
         let Some(lib) = self.library.as_mut() else { return };
         if v != lib.view_written && !lib.blocked.contains(&"view.json") {
-            match lib.files.write_atomic("view.json", &v) {
+            let written = lib.files().write_atomic("view.json", &v);
+            match written {
                 Ok(()) => lib.view_written = v,
                 Err(e) => log::error!("library: view: {e}"),
             }
@@ -576,6 +606,8 @@ impl Session {
             cache_mb: self.cache_mb,
             smart_previews_dir: self.smart_previews_dir.as_ref().map(|d| d.to_string_lossy().to_string()),
             forget_local_days: Some(self.forget_local_days),
+            vera: crate::vera::Prefs { vector_lane: self.vera.lane.vector_lane, describe: self.vera.describe.prefs.clone() },
+            ver: self.ver.prefs.clone(),
         })
         .unwrap_or_default();
         let Some(lib) = self.library.as_mut() else { return Ok(()) };
@@ -584,7 +616,7 @@ impl Session {
                 "prefs: prefs.json couldn't be read when the library opened, so it isn't overwritten; reopen the library to save preferences".into(),
             ));
         }
-        lib.files.write_atomic("prefs.json", &v).map_err(|e| EngineError::Other(format!("prefs: {e}")))
+        lib.files().write_atomic("prefs.json", &v).map_err(|e| EngineError::Other(format!("prefs: {e}")))
     }
 
     /// Warnings about the open library not handed out yet: its settings files, and a lock that

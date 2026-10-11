@@ -100,6 +100,48 @@ pub struct ImportOptions {
     pub metadata_preset: Option<String>,
     /// Copy: raws are copied as DNG (Copy as DNG).
     pub convert_dng: bool,
+    /// A file the import review found to be the same picture as a library photo ([`ImportCandidate::near_duplicate`],
+    /// tier `picture`): stacked under it (default), imported like any other, or skipped.
+    pub on_near_duplicate: NearDuplicateAction,
+}
+
+/// What an import does with a file the review found to be the same picture as a photo already in the library (a
+/// resize, a re-export: different bytes, same picture by fingerprint; `docs/vera.md`). A *possible* match is only
+/// shown, never acted on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NearDuplicateAction {
+    /// Import it and stack it under the photo it is a copy of (collapsed, the library's photo on top).
+    #[default]
+    Stack,
+    /// Import it like any other file.
+    Import,
+    /// Leave it out; the report lists it with `reason: "picture"`.
+    Skip,
+}
+
+impl NearDuplicateAction {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "stack" => Some(Self::Stack),
+            "import" => Some(Self::Import),
+            "skip" => Some(Self::Skip),
+            _ => None,
+        }
+    }
+}
+
+/// An import candidate that looks like a photo already in the library (its fingerprint, not its bytes).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct NearDuplicate {
+    /// The library photo it matches.
+    pub existing: u64,
+    /// `"picture"` (the same picture: a resize, a re-export) or `"possible"` (perhaps: a variant edit, a burst
+    /// neighbour; only shown).
+    pub tier: String,
+    /// Bits that differ: PDQ (of 256) and pHash (of 64).
+    pub pdq: u32,
+    pub phash: u32,
 }
 
 /// How copies are filed in the destination. The date is the capture time, else the time of the
@@ -167,6 +209,9 @@ pub struct ImportCandidate {
     /// A raw variant that can't be decoded yet (why): it imports as preview only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preview_only: Option<String>,
+    /// The same (or possibly the same) picture as a library photo, by fingerprint; see [`ImportOptions::on_near_duplicate`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub near_duplicate: Option<NearDuplicate>,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -174,7 +219,8 @@ pub struct Duplicate {
     pub path: String,
     /// The photo that already has these bytes (or this path).
     pub existing: Option<u64>,
-    /// `"path"` (already imported from there) or `"content"` (same bytes elsewhere).
+    /// `"path"` (already imported from there), `"content"` (same bytes elsewhere) or `"picture"` (the same picture
+    /// by fingerprint, left out by [`NearDuplicateAction::Skip`]).
     pub reason: &'static str,
     /// That photo is in Recently Deleted (see [`OnDeleted`]).
     #[serde(rename = "existingDeleted", skip_serializing_if = "std::ops::Not::not")]
@@ -201,6 +247,16 @@ pub struct ImportReport {
     pub scanned: usize,
     /// Photos whose metadata/develop settings were read from an XMP sidecar (or embedded XMP).
     pub sidecars: usize,
+    /// [`NearDuplicateAction::Stack`]: imported photos stacked under the library photo they are the same picture as.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub stacked: Vec<StackedDuplicate>,
+}
+
+/// A photo an import stacked under the photo it is the same picture as.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct StackedDuplicate {
+    pub photo: u64,
+    pub under: u64,
 }
 
 /// A file moved by an import.
@@ -488,6 +544,8 @@ fn copy_into(dir: &Path, src: &str, name: Option<&str>, probe_hash: Option<&str>
 /// share can take minutes to read).
 pub struct ScanInput {
     probe: Option<crate::media::FileProbe>,
+    /// The same-picture check against the library's digests (`None` while it has none, or when not wanted).
+    pub(crate) near: Option<crate::vera::NearCheck>,
     skip: Option<PathBuf>,
     /// path → (photo, its summary) for files already in the library.
     by_path: HashMap<PathBuf, (PhotoId, ImportCandidate)>,
@@ -509,6 +567,8 @@ pub struct ScanProgress {
 pub struct ScanOutput {
     pub candidates: Vec<ImportCandidate>,
     pub probes: HashMap<String, ProbeInfo>,
+    /// Candidate digests the same-picture check made, by (path, size), for the session to remember.
+    pub(crate) digests: Vec<((String, u64), lightcraft_vera::Digest)>,
 }
 
 impl ScanInput {
@@ -536,7 +596,8 @@ impl ScanInput {
                 by_hash.insert(h.clone(), p.id);
             }
         }
-        let input = ScanInput { probe: s.media.file_probe.clone(), skip, by_path, by_hash, cache: std::mem::take(&mut s.import_probes) };
+        let near = crate::vera::near_check(s);
+        let input = ScanInput { probe: s.media.file_probe.clone(), near, skip, by_path, by_hash, cache: std::mem::take(&mut s.import_probes) };
         (input, paths.to_vec())
     }
 }
@@ -548,6 +609,7 @@ pub fn scan(s: &mut Session, paths: &[String]) -> Vec<ImportCandidate> {
     let (input, paths) = ScanInput::new(s, paths);
     let out = scan_with(input, &paths, &ScanProgress::default());
     s.import_probes = out.probes;
+    crate::vera::remember_candidates(s, out.digests);
     out.candidates
 }
 
@@ -609,7 +671,16 @@ pub fn scan_with(mut input: ScanInput, paths: &[String], progress: &ScanProgress
         }
         out.push(c);
     }
-    ScanOutput { candidates: out, probes: kept }
+    // the same picture as a library photo (a resize, a re-export), once the library has fingerprints; the match rides
+    // on the probe to the import
+    let digests = match input.near {
+        Some(mut check) => {
+            check.run(&mut out, &mut kept, &progress.cancel);
+            check.fresh()
+        }
+        None => Vec::new(),
+    };
+    ScanOutput { candidates: out, probes: kept, digests }
 }
 
 /// Import files/folders. See the module docs.
@@ -906,6 +977,16 @@ impl ImportJob {
                 plan.slots.push(Slot::Item(PreparedItem::Duplicate { path, existing: *existing, reason: "content", hash: Some(h.clone()) }));
                 continue;
             }
+            // the review found this file to be the same picture as a library photo (a probe kept from the review: the
+            // file has not changed since)
+            if !opts.local
+                && opts.on_near_duplicate == NearDuplicateAction::Skip
+                && let Some(existing) = same_picture(&info)
+            {
+                self.done.fetch_add(1, Relaxed);
+                plan.slots.push(Slot::Item(PreparedItem::Duplicate { path, existing: Some(existing), reason: "picture", hash: None }));
+                continue;
+            }
             // the XMP sidecar (or a raw's embedded XMP), read before copying: its capture time files
             // and names the copy when the file itself has none
             let raw = info.kind == MediaKind::Raw;
@@ -1170,6 +1251,12 @@ fn run_transfer(t: Transfer, file_bytes: Option<&crate::merge::ByteReader>) -> P
     PreparedItem::Ready(Box::new(ReadyFile { path, stored, info, sidecar, placed }))
 }
 
+/// The library photo the import review found this file to be the same picture as (tier `picture`; a possible match is
+/// never acted on).
+fn same_picture(info: &ProbeInfo) -> Option<PhotoId> {
+    info.near_duplicate.as_ref().filter(|n| n.tier == "picture").map(|n| PhotoId(n.existing))
+}
+
 /// The catalog half of an import: add the photos [`ImportJob::prepare`] readied (one undoable op;
 /// a Move's sources are removed once it is saved). On a failed commit a Move's placed files are
 /// taken back.
@@ -1195,6 +1282,8 @@ pub fn commit_prepared(s: &mut Session, opts: &ImportOptions, now: &str, prepare
     }
     let mut purge: Vec<PhotoId> = Vec::new();
     let mut purged: std::collections::HashSet<PhotoId> = Default::default();
+    // (new photo, the library photo to stack it under)
+    let mut stack: Vec<(PhotoId, PhotoId)> = Vec::new();
     for it in prepared.items {
         match it {
             PreparedItem::Promote(id) => {
@@ -1225,6 +1314,12 @@ pub fn commit_prepared(s: &mut Session, opts: &ImportOptions, now: &str, prepare
                 let ReadyFile { path, stored, info, sidecar, placed: pl } = *r;
                 placed.extend(pl);
                 let id = s.catalog.alloc_photo_id();
+                if !opts.local
+                    && opts.on_near_duplicate == NearDuplicateAction::Stack
+                    && let Some(under) = same_picture(&info)
+                {
+                    stack.push((id, under));
+                }
                 if let Some(h) = &info.content_hash {
                     new_hash.insert(h.clone(), id);
                 }
@@ -1286,12 +1381,31 @@ pub fn commit_prepared(s: &mut Session, opts: &ImportOptions, now: &str, prepare
     } else {
         ("Add", report.imported.len().max(1))
     };
+    let label = format!("{verb} {n} Photo{}", if n == 1 { "" } else { "s" });
     if !ops.is_empty()
-        && let Err(e) = s.commit(&format!("{verb} {n} Photo{}", if n == 1 { "" } else { "s" }), Op::Batch { ops })
+        && let Err(e) = s.commit(&label, Op::Batch { ops })
     {
         // nothing was catalogued: take the moves back (their sources were never touched)
         placed.iter().for_each(crate::import_move::rollback);
         return Err(e);
+    }
+    // the same pictures as library photos go under them, in the import's undo step (each stack depends on the last)
+    let mut stacked = 0usize;
+    for (photo, under) in stack {
+        if !s.catalog.photo(under).is_some_and(|p| p.in_library()) || s.catalog.photo(photo).is_none() {
+            continue;
+        }
+        let Some(op) = s.catalog.group_ops(under, &[photo], true) else { continue };
+        match s.commit("Stack Duplicate", op) {
+            Ok(()) => {
+                stacked += 1;
+                report.stacked.push(StackedDuplicate { photo: photo.0, under: under.0 });
+            }
+            Err(e) => log::warn!("import: could not stack photo {} under {}: {e}", photo.0, under.0),
+        }
+    }
+    if stacked > 0 {
+        s.merge_undo(stacked + 1, &label);
     }
     if !placed.is_empty() {
         finish_moves(s, placed, log0, &mut report);

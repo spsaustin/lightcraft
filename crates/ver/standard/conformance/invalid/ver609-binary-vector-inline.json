@@ -1,0 +1,91 @@
+{
+  "ver_version": "1.1",
+  "cpnp_version": "1.0",
+  "record_id": "19d90aa2-7a61-531f-85fa-ced3156c8fc2",
+  "created_at": "2026-08-25T10:00:00Z",
+  "generator": {
+    "name": "ver-conformance-corpus",
+    "version": "1.1-draft"
+  },
+  "conformance_level": "L0",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "d02c1cf32be8c1044010aad178885a16e02a4ed1640fe117782cd774ffff2bd2"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "c81f4a33d9731dce8e53f45389ccb05b460d76ae9361bc04dc2dee7455c34be9",
+      "width": 8,
+      "height": 6
+    }
+  },
+  "image": {
+    "format": "png",
+    "width": 8,
+    "height": 6,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.corpus-binary/1.1",
+      "kind": "visual",
+      "model": {
+        "family": "corpus-vision",
+        "architecture": "ViT-Tiny/4",
+        "checkpoint": "corpus-visual-v1",
+        "weights_sha256": "0dfcf4dea153bcdd0b54278d172169c714913c5e71a5896f923359a247f02afb"
+      },
+      "dim": 8,
+      "dtype": "binary",
+      "normalization": "none",
+      "metric": "hamming",
+      "preprocessing": {
+        "resize": "shortest_side_4",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_4",
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "channel_order": "rgb",
+        "quantization": "sign_of_first_8_pca_components",
+        "bit_packing": "msb_first_8_per_octet"
+      },
+      "reference": {
+        "set_uri": "https://refsets.example.org/corpus-binary-1.1",
+        "set_manifest_sha256": "1d7ac5287439417402339af2e96924eb60b90f316c2562d934cb9bb2b88f341f",
+        "tolerance_hamming_max": 4
+      }
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.corpus-binary/1.1",
+      "dim": 8,
+      "dtype": "binary",
+      "vector": [
+        1,
+        -1,
+        1,
+        1,
+        -1,
+        -1,
+        1,
+        -1
+      ],
+      "produced_at": "2026-08-25T09:00:03Z",
+      "producer": "ver-conformance-corpus/1.1-draft"
+    }
+  ]
+}

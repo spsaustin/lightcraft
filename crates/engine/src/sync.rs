@@ -178,7 +178,9 @@ impl SyncInput {
         }
         let namings = s.sidecar_namings(&ids);
         let photos = ids.iter().zip(namings).filter_map(|(id, naming)| s.catalog.photo(*id).map(|p| (Arc::clone(p), naming))).collect();
-        let (scan, _) = ScanInput::new(s, &[path.to_string()]);
+        let (mut scan, _) = ScanInput::new(s, &[path.to_string()]);
+        // Synchronize Folder adds what it finds as it is: no same-picture check (and no stacking) on its new files
+        scan.near = None;
         Ok(SyncInput { folder: path.to_string(), scan, photos, labels: s.catalog.clone() })
     }
 }

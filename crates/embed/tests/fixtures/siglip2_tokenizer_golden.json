@@ -1,0 +1,924 @@
+{
+"source": "tokenizers 0.23.3, Tokenizer.from_file(google/siglip2-base-patch32-256@94dffa8cb1179de3e03f091dbc3917e5d5a9ae84/tokenizer.json)",
+"rows": "encode(text, add_special_tokens=False), padding off: Tokenizer::encode",
+"lower_rows": "the same with the normaliser Sequence([Lowercase, Replace(' ', '▁')]) of transformers' Siglip2Tokenizer: Tokenizer::encode_lowercase",
+"with_special_tokens": "add_special_tokens=True; the first with the file's Fixed(64) right padding on, the second with padding off",
+"encodings": [
+{
+"text": "golden hour surf",
+"ids": [
+34716,
+6370,
+23238
+]
+},
+{
+"text": "a dog on the beach",
+"ids": [
+235250,
+5929,
+611,
+573,
+8318
+]
+},
+{
+"text": "Golden Hour SURF",
+"ids": [
+35785,
+32553,
+26603,
+235311
+]
+},
+{
+"text": "a photo of a cat",
+"ids": [
+235250,
+2686,
+576,
+476,
+4401
+]
+},
+{
+"text": "sunset over the mountains",
+"ids": [
+78231,
+1163,
+573,
+17200
+]
+},
+{
+"text": "black and white portrait",
+"ids": [
+6944,
+578,
+2674,
+17772
+]
+},
+{
+"text": "2026-04-12 iso 6400",
+"ids": [
+235284,
+235276,
+235284,
+235318,
+235290,
+235276,
+235310,
+235290,
+235274,
+235284,
+30240,
+235248,
+235318,
+235310,
+235276,
+235276
+]
+},
+{
+"text": "f/2.8 1/250s",
+"ids": [
+235266,
+235283,
+235284,
+235265,
+235321,
+235248,
+235274,
+235283,
+235284,
+235308,
+235276,
+235256
+]
+},
+{
+"text": "img_0042.cr3",
+"ids": [
+3030,
+235298,
+235276,
+235276,
+235310,
+235284,
+235265,
+6190,
+235304
+]
+},
+{
+"text": "100 balloons",
+"ids": [
+235274,
+235276,
+235276,
+53870
+]
+},
+{
+"text": "3.14159",
+"ids": [
+235304,
+235265,
+235274,
+235310,
+235274,
+235308,
+235315
+]
+},
+{
+"text": "Renee's lake at first light!",
+"ids": [
+165148,
+235303,
+235256,
+13492,
+696,
+1370,
+2611,
+235341
+]
+},
+{
+"text": "don't stop, won't stop?",
+"ids": [
+7589,
+235303,
+235251,
+4673,
+235269,
+2792,
+235303,
+235251,
+4673,
+235336
+]
+},
+{
+"text": "\"quoted\" (parens) [brackets] {braces}",
+"ids": [
+235281,
+94032,
+235281,
+591,
+3206,
+558,
+235275,
+892,
+198272,
+235307,
+612,
+3453,
+915,
+235270
+]
+},
+{
+"text": "a-b_c/d\\e",
+"ids": [
+235250,
+235290,
+235268,
+235298,
+235260,
+235283,
+235258,
+235286,
+235249
+]
+},
+{
+"text": "email@example.com #hashtag",
+"ids": [
+4614,
+235348,
+7310,
+235265,
+872,
+1700,
+187244
+]
+},
+{
+"text": "Ärger im Café",
+"ids": [
+117390,
+1197,
+1485,
+45521
+]
+},
+{
+"text": "東京 夜景",
+"ids": [
+19485,
+155372
+]
+},
+{
+"text": "🌊 wave",
+"ids": [
+242389,
+9591
+]
+},
+{
+"text": "naïve façade",
+"ids": [
+556,
+236370,
+524,
+84523
+]
+},
+{
+"text": "Здравствуй мир",
+"ids": [
+235776,
+67219,
+235390,
+53459
+]
+},
+{
+"text": "ΟΔΟΣ στο ΒΟΥΝΟ",
+"ids": [
+236651,
+236818,
+82406,
+24692,
+48466,
+68337,
+237246,
+236651
+]
+},
+{
+"text": "İstanbul",
+"ids": [
+236104,
+38980
+]
+},
+{
+"text": "مرحبا",
+"ids": [
+131374,
+19833
+]
+},
+{
+"text": "नमस्ते",
+"ids": [
+235530,
+235579,
+45884,
+235483
+]
+},
+{
+"text": "😀😃😄",
+"ids": [
+239061,
+239938,
+239634
+]
+},
+{
+"text": "Ω≈ç√∫",
+"ids": [
+238142,
+239436,
+235409,
+237813,
+240705
+]
+},
+{
+"text": "é vs é",
+"ids": [
+235335,
+5135,
+526,
+236703
+]
+},
+{
+"text": " leading space",
+"ids": [
+8133,
+3641
+]
+},
+{
+"text": "trailing space ",
+"ids": [
+100504,
+3641,
+235248
+]
+},
+{
+"text": "  two leading",
+"ids": [
+139,
+9721,
+8133
+]
+},
+{
+"text": "multiple   inner    spaces",
+"ids": [
+38571,
+140,
+4311,
+141,
+46633
+]
+},
+{
+"text": "   ",
+"ids": [
+140
+]
+},
+{
+"text": " ",
+"ids": [
+235248
+]
+},
+{
+"text": "",
+"ids": []
+},
+{
+"text": "a",
+"ids": [
+235250
+]
+},
+{
+"text": "line\nbreak",
+"ids": [
+703,
+108,
+1553
+]
+},
+{
+"text": "tab\tseparated",
+"ids": [
+1189,
+226,
+101530
+]
+},
+{
+"text": "two\n\nlines",
+"ids": [
+9721,
+109,
+5448
+]
+},
+{
+"text": "a\t\tb",
+"ids": [
+235250,
+255969,
+235268
+]
+},
+{
+"text": "<mask> token",
+"ids": [
+4,
+8447
+]
+},
+{
+"text": "<MASK> token",
+"ids": [
+235322,
+43551,
+235313,
+8447
+]
+},
+{
+"text": "<eos> in text",
+"ids": [
+1,
+575,
+2793
+]
+},
+{
+"text": "<b>bold</b>",
+"ids": [
+201,
+8766,
+210
+]
+},
+{
+"text": "a▁b",
+"ids": [
+235250,
+518
+]
+},
+{
+"text": "\u0000nul",
+"ids": [
+217,
+92347
+]
+},
+{
+"text": "zero​width",
+"ids": [
+14033,
+235421,
+2791
+]
+},
+{
+"text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+"ids": [
+223505,
+223505,
+83234
+]
+},
+{
+"text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab",
+"ids": [
+84377,
+84377,
+84377,
+84377,
+29066,
+670
+]
+},
+{
+"text": "the quick brown fox jumps over the lazy dog while a photographer captures golden hour light on the river bank near the old stone bridge in autumn with fog rolling over the hills and children playing in the distance",
+"ids": [
+1175,
+4320,
+8426,
+25341,
+36271,
+1163,
+573,
+27894,
+5929,
+2183,
+476,
+36485,
+59188,
+13658,
+6370,
+2611,
+611,
+573,
+8540,
+5681,
+3018,
+573,
+2187,
+9566,
+12261,
+575,
+22119,
+675,
+17373,
+21276,
+1163,
+573,
+22275,
+578,
+3069,
+6155,
+575,
+573,
+6075
+]
+},
+{
+"text": "the quick brown fox jumps over the lazy dog while a photographer captures golden hour light on the river bank near the old stone bridge in autumn with fog rolling over the hills and children playing in the distance THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG WHILE A PHOTOGRAPHER CAPTURES GOLDEN HOUR LIGHT ON THE RIVER BANK NEAR THE OLD STONE BRIDGE IN AUTUMN WITH FOG ROLLING OVER THE HILLS AND CHILDREN PLAYING IN THE DISTANCE",
+"ids": [
+1175,
+4320,
+8426,
+25341,
+36271,
+1163,
+573,
+27894,
+5929,
+2183,
+476,
+36485,
+59188,
+13658,
+6370,
+2611,
+611,
+573,
+8540,
+5681,
+3018,
+573,
+2187,
+9566,
+12261,
+575,
+22119,
+675,
+17373,
+21276,
+1163,
+573,
+22275,
+578,
+3069,
+6155,
+575,
+573,
+6075,
+2317,
+119487,
+67453,
+60722,
+713,
+2871,
+3817,
+29560,
+2317,
+6461,
+34700,
+81867,
+125854,
+586,
+49204,
+19095,
+29362,
+133743,
+14668,
+134429,
+118291,
+52390,
+6070,
+2317,
+61579,
+57147,
+98139,
+2317,
+48649,
+112216,
+125842,
+2284,
+71891,
+34940,
+12802,
+225148,
+10620,
+87395,
+29560,
+2317,
+191221,
+3228,
+77565,
+166724,
+2284,
+2317,
+156775
+]
+},
+{
+"text": "supercalifragilisticexpialidocious",
+"ids": [
+3388,
+1696,
+648,
+2086,
+23644,
+3254,
+33210,
+918,
+2476,
+5345
+]
+},
+{
+"text": "Pneumonoultramicroscopicsilicovolcanoconiosis",
+"ids": [
+185721,
+477,
+6311,
+1383,
+2324,
+53004,
+542,
+9332,
+4067,
+21518,
+759,
+62670
+]
+}
+],
+"lower_encodings": [
+{
+"text": "Golden Hour SURF",
+"ids": [
+34716,
+6370,
+23238
+]
+},
+{
+"text": "Renee's lake at first light!",
+"ids": [
+478,
+11472,
+235303,
+235256,
+13492,
+696,
+1370,
+2611,
+235341
+]
+},
+{
+"text": "Ärger im Café",
+"ids": [
+2967,
+1197,
+1485,
+18688
+]
+},
+{
+"text": "Здравствуй мир",
+"ids": [
+130148,
+13880,
+235390,
+53459
+]
+},
+{
+"text": "ΟΔΟΣ στο ΒΟΥΝΟ",
+"ids": [
+235468,
+46643,
+235552,
+24692,
+19292,
+4796,
+14368
+]
+},
+{
+"text": "İstanbul",
+"ids": [
+235252,
+241780,
+38980
+]
+},
+{
+"text": "Ω≈ç√∫",
+"ids": [
+235897,
+239436,
+235409,
+237813,
+240705
+]
+},
+{
+"text": "<mask> token",
+"ids": [
+4,
+8447
+]
+},
+{
+"text": "<MASK> token",
+"ids": [
+235322,
+11315,
+235313,
+8447
+]
+},
+{
+"text": "<eos> in text",
+"ids": [
+1,
+575,
+2793
+]
+},
+{
+"text": "<b>bold</b>",
+"ids": [
+201,
+8766,
+210
+]
+},
+{
+"text": "the quick brown fox jumps over the lazy dog while a photographer captures golden hour light on the river bank near the old stone bridge in autumn with fog rolling over the hills and children playing in the distance THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG WHILE A PHOTOGRAPHER CAPTURES GOLDEN HOUR LIGHT ON THE RIVER BANK NEAR THE OLD STONE BRIDGE IN AUTUMN WITH FOG ROLLING OVER THE HILLS AND CHILDREN PLAYING IN THE DISTANCE",
+"ids": [
+1175,
+4320,
+8426,
+25341,
+36271,
+1163,
+573,
+27894,
+5929,
+2183,
+476,
+36485,
+59188,
+13658,
+6370,
+2611,
+611,
+573,
+8540,
+5681,
+3018,
+573,
+2187,
+9566,
+12261,
+575,
+22119,
+675,
+17373,
+21276,
+1163,
+573,
+22275,
+578,
+3069,
+6155,
+575,
+573,
+6075,
+573,
+4320,
+8426,
+25341,
+36271,
+1163,
+573,
+27894,
+5929,
+2183,
+476,
+36485,
+59188,
+13658,
+6370,
+2611,
+611,
+573,
+8540,
+5681,
+3018,
+573,
+2187,
+9566,
+12261,
+575,
+22119,
+675,
+17373,
+21276,
+1163,
+573,
+22275,
+578,
+3069,
+6155,
+575,
+573,
+6075
+]
+},
+{
+"text": "Pneumonoultramicroscopicsilicovolcanoconiosis",
+"ids": [
+179172,
+477,
+6311,
+1383,
+2324,
+53004,
+542,
+9332,
+4067,
+21518,
+759,
+62670
+]
+}
+],
+"special_encodings": [
+{
+"text": "golden hour surf",
+"ids": [
+34716,
+6370,
+23238,
+1,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0
+]
+},
+{
+"text": "golden hour surf",
+"ids": [
+34716,
+6370,
+23238,
+1
+]
+}
+]
+}

@@ -49,12 +49,15 @@ pub const TABLE: &[(&str, Class)] = &[
     ("faces", Class::Layer(1)),
     ("scenes", Class::Layer(1)),
     ("pipeline", Class::Layer(2)),
+    ("vera", Class::Layer(2)),
     ("gpu", Class::Layer(3)),
     ("catalog", Class::Layer(3)),
     ("preview", Class::Layer(3)),
     ("export", Class::Layer(3)),
     ("merge", Class::Layer(3)),
     ("segment", Class::Layer(3)),
+    ("embed", Class::Layer(3)),
+    ("ver", Class::Layer(3)),
     ("engine", Class::Layer(4)),
     ("ui-egui", Class::Layer(5)),
     ("mcp", Class::Layer(5)),
@@ -78,6 +81,8 @@ pub const INTRA_LAYER_ORDER: &[&[&str]] = &[
     &["meta", "develop"],
     &["develop", "scenes"],
     &["codecs", "raw"],
+    // L3: `embed` may record its vectors as VER Records.
+    &["ver", "embed"],
 ];
 
 fn intra_layer_allowed(from: &str, to: &str) -> bool {

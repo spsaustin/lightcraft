@@ -1,0 +1,229 @@
+{
+  "ver_version": "1.0",
+  "cpnp_version": "1.0",
+  "record_id": "a3f1c2e4-9b7d-4e21-8c55-2f6a0d9b3e71",
+  "created_at": "2026-08-21T14:02:11Z",
+  "generator": {
+    "name": "ver-producer",
+    "version": "1.0.3"
+  },
+  "conformance_level": "L3",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "6f1ed002ab5595859014ebf0951522d9a2f5b1a3cbb1a049c8bd0d38f2a4c9e1"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
+      "width": 4032,
+      "height": 3024
+    },
+    "perceptual": [
+      {
+        "alg": "pdq/1.0",
+        "value": "f8f8f0cee0f4a84f06370a22038f63f0b36e2ed596621e1d33e6b39c4e9c9b22"
+      },
+      {
+        "alg": "phash-dct/64",
+        "value": "c3a5e1f09b2d4c86"
+      }
+    ]
+  },
+  "image": {
+    "format": "jpeg",
+    "width": 4032,
+    "height": 3024,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false,
+    "source_bytes_ref": {
+      "uri": "https://assets.example.org/blobs/6f1ed002ab5595859014ebf0951522d9",
+      "sha256": "6f1ed002ab5595859014ebf0951522d9a2f5b1a3cbb1a049c8bd0d38f2a4c9e1",
+      "byte_length": 2841377
+    }
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.openclip-vit-l14-datacomp-xl/1.0",
+      "kind": "visual",
+      "model": {
+        "family": "openclip",
+        "architecture": "ViT-L/14",
+        "checkpoint": "datacomp_xl_s13b_b90k",
+        "weights_sha256": "9a3c1de07b44f2e6c815a0db93e4f172c60b58aa14dd0f3e2b7c9615f4a8d203"
+      },
+      "dim": 768,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_224",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_224",
+        "mean": [
+          0.48145466,
+          0.4578275,
+          0.40821073
+        ],
+        "std": [
+          0.26862954,
+          0.26130258,
+          0.27577711
+        ],
+        "channel_order": "rgb"
+      },
+      "reference": {
+        "set_uri": "https://verstandard.org/refsets/openclip-vit-l14-datacomp-xl-1.0",
+        "tolerance_cosine": 0.999
+      },
+      "provenance": {
+        "publisher": "verstandard.org",
+        "published_at": "2026-06-01T00:00:00Z",
+        "license": "MIT"
+      }
+    },
+    {
+      "space_id": "org.verstandard.space.minilm-l6-v2/1.0",
+      "kind": "text",
+      "model": {
+        "family": "sentence-transformers",
+        "architecture": "MiniLM-L6",
+        "checkpoint": "all-MiniLM-L6-v2",
+        "weights_sha256": "1c2f4b6a8e0d3579b1c4e6f80a2d4c6e8f0b2d4a6c8e0f2b4d6a8c0e2f4b6d8a"
+      },
+      "dim": 384,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "tokenizer": "bert-base-uncased-wordpiece",
+        "tokenizer_sha256": "4d8a2c6e0f4b8d2a6c0e4f8b2d6a0c4e8f2b6d0a4c8e2f6b0d4a8c2e6f0b4d8a",
+        "max_length": 256,
+        "truncation": "tail",
+        "casing": "lower"
+      },
+      "reference": {
+        "set_uri": "https://verstandard.org/refsets/minilm-l6-v2-1.0",
+        "tolerance_cosine": 0.999
+      }
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.openclip-vit-l14-datacomp-xl/1.0",
+      "dim": 768,
+      "dtype": "fp32",
+      "vector_ref": {
+        "uri": "https://vectors.example.org/a3f1c2e4/canonical-visual.f32le",
+        "sha256": "2c624232cdd221771294dfbb310aca000a0df6ac8b66b696d90ef06fdefb64a3",
+        "byte_length": 3072
+      },
+      "produced_at": "2026-08-21T14:02:10Z",
+      "producer": "ver-producer/1.0.3 (onnxruntime-gpu 1.22, fp32)"
+    },
+    {
+      "role": "contextual",
+      "space_id": "org.verstandard.space.minilm-l6-v2/1.0",
+      "dim": 384,
+      "dtype": "fp32",
+      "source": {
+        "class": "alt_text",
+        "text_sha256": "d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26",
+        "lang": "en",
+        "provenance": "og:image:alt at source_uri"
+      },
+      "vector_ref": {
+        "uri": "https://vectors.example.org/a3f1c2e4/ctx-alt-text.f32le",
+        "sha256": "19581e27de7ced00ff1ce50b2047e7a567c76b1cbaebabe5ef03f7c3017bb5b7",
+        "byte_length": 1536
+      },
+      "produced_at": "2026-08-21T14:02:11Z",
+      "producer": "ver-producer/1.0.3"
+    }
+  ],
+  "metadata": {
+    "raw": [
+      {
+        "segment": "icc",
+        "bytes": "SUNDX1BST0ZJTEUAAQEAAAJMbGNtcwRAAABtbnRyUkdCIFhZWiAAAAAAAAAAAAAAAABhY3NwQVBQTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA9tYAAQAAAADTLWxjbXMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAtkZXNjAAABCAAAADZjcHJ0AAABQAAAAEx3dHB0AAABjAAAABRjaGFkAAABoAAAACxyWFlaAAABzAAAABRiWFlaAAAB4AAAABRnWFlaAAAB9AAAABRyVFJDAAACCAAAACBnVFJDAAACCAAAACBiVFJDAAACCAAAACBjaHJtAAACKAAAACRtbHVjAAAAAAAAAAEAAAAMZW5VUwAAABoAAAAcAHMAUgBHAEIAIABiAHUAaQBsAHQALQBpAG4AAG1sdWMAAAAAAAAAAQAAAAxlblVTAAAAMAAAABwATgBvACAAYwBvAHAAeQByAGkAZwBoAHQALAAgAHUAcwBlACAAZgByAGUAZQBsAHlYWVogAAAAAAAA9tYAAQAAAADTLXNmMzIAAAAAAAEMQgAABd7///MlAAAHkwAA/ZD///uh///9ogAAA9wAAMBuWFlaIAAAAAAAAG+gAAA49QAAA5BYWVogAAAAAAAAJJ8AAA+EAAC2w1hZWiAAAAAAAABilwAAt4cAABjZcGFyYQAAAAAAAwAAAAJmZgAA8qcAAA1ZAAAT0AAACltjaHJtAAAAAAADAAAAAKPXAABUewAATM0AAJmaAAAmZgAAD1w=",
+        "sha256": "a106fd0f3203936b46f396bfcf79dcc396f5eda43508bb760c9649d50a5c6e7a"
+      }
+    ],
+    "availability": {
+      "exif": "stripped_suspected",
+      "xmp": "absent",
+      "iptc": "absent",
+      "icc": "present",
+      "c2pa": "absent"
+    },
+    "availability_basis": "Acquired from a social CDN endpoint documented to strip EXIF/XMP on ingest; ICC retained by that pipeline.",
+    "normalized": {
+      "@context": {
+        "dc": "http://purl.org/dc/elements/1.1/",
+        "Iptc4xmpExt": "http://iptc.org/std/Iptc4xmpExt/2008-02-29/"
+      },
+      "dc:description": "Sunset over a boardwalk, silhouetted pier in background."
+    },
+    "conflicts": [],
+    "trust": [
+      {
+        "field": "dc:description",
+        "tier": "unsigned"
+      }
+    ],
+    "redactions": []
+  },
+  "provenance": {
+    "acquisition": {
+      "method": "http_fetch",
+      "source_uri": "https://cdn.socialexample.com/media/9f2e/full.jpg",
+      "acquired_at": "2026-08-21T14:01:52Z",
+      "actor": "crawler-07"
+    },
+    "chain": [
+      {
+        "at": "2026-08-21T14:01:52Z",
+        "actor": "crawler-07",
+        "action": "import",
+        "tool": "ver-fetch/1.0"
+      },
+      {
+        "at": "2026-08-21T14:02:08Z",
+        "actor": "ver-producer",
+        "action": "decode",
+        "tool": "libjpeg-turbo 3.0 (sandboxed)"
+      },
+      {
+        "at": "2026-08-21T14:02:09Z",
+        "actor": "ver-producer",
+        "action": "normalize",
+        "tool": "cpnp-1/lcms2",
+        "params_sha256": "9b74c9897bac770ffc029102a200c5de1b1e6f7f2c1d5d7a3b1a0c9e8d7f6a5b"
+      },
+      {
+        "at": "2026-08-21T14:02:10Z",
+        "actor": "ver-producer",
+        "action": "embed",
+        "tool": "onnxruntime-gpu 1.22"
+      },
+      {
+        "at": "2026-08-21T14:02:11Z",
+        "actor": "ver-producer",
+        "action": "embed",
+        "tool": "onnxruntime-gpu 1.22 (text tower)"
+      }
+    ],
+    "c2pa": {
+      "status": "missing"
+    },
+    "signature": {
+      "format": "jws-detached",
+      "canonicalization": "rfc8785-jcs",
+      "value": "eyJhbGciOiJFZERTQSIsImtpZCI6InZlci1jb25mb3JtYW5jZS1jb3JwdXMtMjAyNi0wOCJ9..v2GJT8uBBxK1xpv_cvLtiD8UZgc5yHDdW7_6MED3Yyxl6nk14aEIJ73EENZ3A3xb1IC10m4gjN9DQ25KSVKGCQ",
+      "key_id": "ver-conformance-corpus-2026-08"
+    }
+  }
+}

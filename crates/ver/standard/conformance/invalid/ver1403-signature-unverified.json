@@ -1,0 +1,127 @@
+{
+  "ver_version": "1.0",
+  "cpnp_version": "1.0",
+  "record_id": "9f856271-f237-5ef7-b997-6bb3b8d706da",
+  "created_at": "2026-08-22T09:14:20Z",
+  "generator": {
+    "name": "ver-conformance-corpus",
+    "version": "1.0.1"
+  },
+  "conformance_level": "L1",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "45656e3ec534f0e6993853cbe1c9645ce535741ddbb1a1fc69c8673c303a685b"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "c87ca9f2ee178aa90e590fa07f095e39dbc2165f4a6fbeeb0cd8028044fbc5b9",
+      "width": 4032,
+      "height": 3024
+    },
+    "perceptual": [
+      {
+        "alg": "pdq/1.0",
+        "value": "0d9fcc58abcbea94dc55669723d8d8f13bb6c0c121b9aea65901f02293f69773"
+      },
+      {
+        "alg": "phash-dct/64",
+        "value": "1f4a0b21cc1277c7"
+      }
+    ]
+  },
+  "image": {
+    "format": "jpeg",
+    "width": 4032,
+    "height": 3024,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false,
+    "source_bytes_ref": {
+      "uri": "https://assets.example.org/blobs/boardwalk-sunset.jpg",
+      "sha256": "45656e3ec534f0e6993853cbe1c9645ce535741ddbb1a1fc69c8673c303a685b",
+      "byte_length": 2841377
+    }
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.openclip-vit-l14-datacomp-xl/1.0",
+      "kind": "visual",
+      "model": {
+        "family": "openclip",
+        "architecture": "ViT-L/14",
+        "checkpoint": "datacomp_xl_s13b_b90k",
+        "weights_sha256": "808c5c3d755c7eee2f168b8432b5601067cd9467d759bd2ebe1f72265920a6a1"
+      },
+      "dim": 768,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_224",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_224",
+        "mean": [
+          0.48145466,
+          0.4578275,
+          0.40821073
+        ],
+        "std": [
+          0.26862954,
+          0.26130258,
+          0.27577711
+        ],
+        "channel_order": "rgb"
+      },
+      "reference": {
+        "set_uri": "https://verstandard.org/refsets/openclip-vit-l14-datacomp-xl-1.0",
+        "tolerance_cosine": 0.999
+      },
+      "provenance": {
+        "publisher": "verstandard.org",
+        "published_at": "2026-06-01T00:00:00Z",
+        "license": "MIT"
+      }
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.openclip-vit-l14-datacomp-xl/1.0",
+      "dim": 768,
+      "dtype": "fp32",
+      "vector_ref": {
+        "uri": "https://vectors.example.org/boardwalk-sunset/canonical-visual-openclip-vit-l14-datacomp-xl.bin",
+        "sha256": "8d1fe99b503b9439f6d0b513a6da3418a6ae02302be69460ccd77cd2aa726ef8",
+        "byte_length": 3072
+      },
+      "produced_at": "2026-08-22T09:14:10Z",
+      "producer": "ver-producer/1.0.3 (onnxruntime-gpu 1.22, fp32)"
+    }
+  ],
+  "metadata": {
+    "raw": [
+      {
+        "segment": "icc",
+        "bytes": "AAAMSGxjbXMEMAAAbW50clJHQiBYWVogB+YACAAF",
+        "sha256": "bd3f0d3a80cc54728e5b80537f15e9615dfe8a8a4f7d3d8ad6569f07c69a7fbb"
+      }
+    ],
+    "availability": {
+      "exif": "absent",
+      "xmp": "absent",
+      "iptc": "absent",
+      "icc": "present",
+      "c2pa": "absent"
+    }
+  },
+  "provenance": {
+    "signature": {
+      "format": "jws-detached",
+      "canonicalization": "rfc8785-jcs",
+      "value": "eyJhbGciOiJFZERTQSIsImtpZCI6InZlci1jb25mb3JtYW5jZS1jb3JwdXMtMjAyNi0wOCJ9..PkCWKK4d7-_fyPlxlFyRjzKIy4Hep7MeZnS-b_I9cHz1bfGopSJI9pXiOospPRFQQaLIm2CKYm9xG4XVRT6wDw",
+      "key_id": "ver-conformance-corpus-2026-08"
+    }
+  }
+}

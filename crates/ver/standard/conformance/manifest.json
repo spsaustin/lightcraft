@@ -1,0 +1,1056 @@
+{
+  "manifest_version": "1.1",
+  "corpus": "ver-conformance/1.1-draft",
+  "profile": "vera-profile/1.0",
+  "default_schema": "1.0.1",
+  "generated": "2026-08-25",
+  "coverage_exemptions": [
+    {
+      "code": "VER001",
+      "reason": "validator-internal-error is not file-reachable, and must not be. VER001 is the one code that reports on the validator rather than on the record: it is emitted when a rule raises, which is a defect in ver_validator, never a property of any document. A fixture that provoked it would be a fixture pinning a specific validator bug \u2014 it would stop reproducing the moment the bug was fixed, and it would be the only file in the corpus whose expected result was not a statement about the standard. The rule is covered instead by monkeypatched unit tests: tests/test_profile_validator.py::test_a_rule_that_raises_is_ver001_and_makes_the_run_indeterminate (plus test_an_internal_error_outranks_every_other_finding, test_a_crashing_rule_does_not_stop_the_other_rules, test_ver001_is_reported_once_per_crashing_unit and test_a_crashing_structural_stage_is_also_ver001), which seed a deliberately-raising rule and assert VER001, status 'indeterminate' and ok false."
+    },
+    {
+      "code": "VER607",
+      "reason": "non-finite-vector-component cannot be reached from a file fixture. NaN, Infinity and -Infinity are JavaScript literals, not RFC 8259 JSON, so a document containing one is rejected at stage 1 as VER101 and never reaches stage 6 \u2014 a fixture carrying them would test VER101 under a VER607 filename. The rule exists for the other entry point: validate_record() accepts an already-parsed Python object, where a non-finite float is representable and arrives with nothing between it and an index. It is covered there, by tests/test_profile_validator.py::test_stage6_non_finite_vector_components_are_ver607, which also asserts that the file form is VER101."
+    }
+  ],
+  "valid": [
+    {
+      "file": "valid/minimal-l0.json",
+      "description": "The L0 floor: identity, image facts, one fully described visual space and the canonical visual embedding it anchors. Nothing optional is present.",
+      "allowed_warnings": []
+    },
+    {
+      "file": "valid/l1-raw-metadata.json",
+      "description": "L1: byte-exact EXIF and ICC segments preserved with real sha256 digests over exactly the bytes carried, and an availability state for all five families.",
+      "allowed_warnings": []
+    },
+    {
+      "file": "valid/l2-reconciled.json",
+      "description": "L2: a reconciled normalized view, a preserved dc:creator conflict between the XMP packet the record carries and the hosting platform's own attribution, and a trust tier for every reconciled field.",
+      "allowed_warnings": []
+    },
+    {
+      "file": "valid/l3-full.json",
+      "description": "The published 1.0.1 example record plus a real detached Ed25519 JWS over its RFC 8785 JCS form (annex E17). Validates with zero issues when the corpus public key is supplied.",
+      "allowed_warnings": [
+        "VER1403"
+      ],
+      "also": [
+        {
+          "signature_key": "keys/corpus-signing-key.pub.pem",
+          "expect_codes": [],
+          "expect_severity": "none",
+          "note": "signature verifies against the shipped public key"
+        }
+      ]
+    },
+    {
+      "file": "valid/inline-vector.json",
+      "description": "Inline float carriage: exactly dim components, L2-normalized as the descriptor declares. Uses a 16-dimensional fixture space so the vector stays readable.",
+      "allowed_warnings": []
+    },
+    {
+      "file": "valid/b64-vector.json",
+      "description": "Base64 carriage of the same 16-component vector: 64 little-endian fp32 bytes, no header and no padding beyond base64's own.",
+      "allowed_warnings": []
+    },
+    {
+      "file": "valid/contextual-and-fused.json",
+      "description": "All three roles in one record: canonical visual, a provenance-graded contextual vector, and a fused vector whose recipe names two declared input spaces (annex E20).",
+      "allowed_warnings": []
+    },
+    {
+      "file": "valid/stripped-suspected-with-basis.json",
+      "description": "stripped_suspected is an accusation about the acquisition channel, so the record states its basis (spec section 7.2).",
+      "allowed_warnings": []
+    },
+    {
+      "file": "valid/redacted-with-proof.json",
+      "description": "Redaction-with-proof (spec section 7.5): the normalized view carries the replacement object, redactions[] is the ledger, availability says 'redacted', and no raw iptc-iim segment is shipped that would leak the removed value (annex E15).",
+      "allowed_warnings": []
+    },
+    {
+      "file": "valid/binary-dtype.json",
+      "description": "Binary carriage: 256 components packed 8 per byte, so the payload is 32 bytes rather than dim * dtype_size (annex E24).",
+      "allowed_warnings": []
+    },
+    {
+      "file": "valid/lineage-exported.json",
+      "schema": "1.1-draft",
+      "description": "Draft section 3.5 fixture 1 \u2014 'exported': the WebP rendition and the PNG it was exported from carry different content_hash values and the same pixel_hash, because a re-encode changes the bytes and not the Canonical Buffer. Accepted.",
+      "allowed_warnings": [],
+      "notes": "The parent states pixel_hash.cpnp_version '1.0', the same universe as the record's, so the two digests are comparable and agree (annex E10). It also carries content_hash, which is what keeps VER1606 silent."
+    },
+    {
+      "file": "valid/lineage-composed.json",
+      "schema": "1.1-draft",
+      "description": "Draft section 3.5 fixture 2 \u2014 'composed': a compose chain event with two composed parents, bound to a recipe envelope by a real recipe_sha256. Accepted.",
+      "allowed_warnings": [],
+      "notes": "recipe_sha256 is the SHA-256 of the RFC 8785 JCS serialization of the recipe envelope of draft section 3.4, which is exactly {\"recipe_version\":\"1\",\"canonicalization\":\"rfc8785-jcs\",\"steps\":[{\"op\":\"canvas\",\"width\":8,\"height\":6,\"background\":\"#000000\"},{\"op\":\"place\",\"source\":\"parent-a\",\"x\":0,\"y\":0},{\"op\":\"place\",\"source\":\"parent-b\",\"x\":4,\"y\":0}]} \u2014 the envelope validates against standards/ver/1.1-draft/ver-recipe.schema.json. The same digest is carried as the compose event's params_sha256 and inside recipe_uri, so the three are cross-checkable."
+    },
+    {
+      "file": "valid/lineage-dangling.json",
+      "schema": "1.1-draft",
+      "description": "Draft section 3.5 fixture 8 \u2014 'dangling': a parent whose record_uri does not resolve. ACCEPTED, and the acceptance is the point of the fixture.",
+      "allowed_warnings": [],
+      "notes": "An unresolvable parent is not a malformed record, and a validator that made network reachability part of conformance would repeat VER1303's mistake \u2014 allocating a code for a question no offline validator can answer, and then answering it against the producer. Nothing is fetched here, or attempted: the profile performs no network I/O at all. The parent carries content_hash, so the fixture demonstrates the dangling URI alone and not also VER1606."
+    },
+    {
+      "file": "valid/l3-full-1-1.json",
+      "schema": "1.1-draft",
+      "description": "The 1.1 golden: standards/ver/1.1-draft/example-record-lineage.json byte for byte. L3, a composed lineage of two pinned parents, two model bundles with recomputable manifest_sha256 and descriptor_sha256 values, a redaction ledger carrying both states, a two-segment XMP family with ordinals, and an 'unverifiable' C2PA verdict.",
+      "allowed_warnings": [
+        "VER308"
+      ],
+      "notes": "The record is unsigned, so the L3 SHOULD stands as VER308 \u2014 the published example deliberately carries no signature, because it also carries no 'sign' chain event and fabricating a signature value to illustrate a rule about signatures is the defect class the 1.1 revision exists to remove. Unlike valid/l3-full.json this fixture adds nothing to the example it tracks; tests/test_conformance_fixtures.py::test_the_1_1_golden_tracks_the_published_lineage_example pins the equality.",
+      "also": [
+        {
+          "profile": "high-trust",
+          "expect_codes": [
+            "VER308"
+          ],
+          "note": "the high-trust profile changes nothing here: both parents carry content_hash, so VER1606 never fires and there is nothing to promote"
+        }
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "file": "invalid/ver101-unparseable-json.json",
+      "target_code": "VER101",
+      "description": "Deliberately malformed JSON: a trailing comma before a closing brace and a truncated document. Not parseable, so no other stage can run.",
+      "expect_codes": [
+        "VER101"
+      ],
+      "expect_severity": "error",
+      "notes": "This file is intentionally not valid JSON; skip it in any JSON well-formedness sweep over the corpus."
+    },
+    {
+      "file": "invalid/ver102-not-a-json-object.json",
+      "target_code": "VER102",
+      "description": "A conformant record wrapped in a JSON array. A VER record is a JSON object at the top level; a batch envelope is not a record.",
+      "expect_codes": [
+        "VER102"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver103-record-exceeds-hard-cap.json",
+      "target_code": "VER103",
+      "description": "A conformant L1 record run against a deliberately small hard cap. The cap is a deployment policy (default 64 MiB), so the fixture exercises it with --max-bytes 1024 rather than shipping a 64 MiB file.",
+      "expect_codes": [
+        "VER103"
+      ],
+      "expect_severity": "error",
+      "max_bytes": 1024,
+      "notes": "Run with --max-bytes 1024. Without that flag this record is conformant.",
+      "also": [
+        {
+          "max_bytes": null,
+          "expect_codes": [],
+          "expect_severity": "none",
+          "note": "under the default 64 MiB cap the record is conformant and silent"
+        }
+      ]
+    },
+    {
+      "file": "invalid/ver104-record-size-policy.json",
+      "target_code": "VER104",
+      "description": "An inline vector of 1,048,577 components: 8,388,616 bytes at the documented 8-bytes-per-component proxy, past the 6 MiB single-vector advisory. VER 1.0 sets no normative size limits, so this is a warning; VER 1.1 drafts real limits.",
+      "expect_codes": [
+        "VER104"
+      ],
+      "expect_severity": "warning",
+      "notes": "The largest fixture in the corpus (~2.1 MB), and the file size is deliberately unlike the threshold it trips: an inline JSON array is sized by a documented proxy of 8 bytes per component, independent of the declared dtype, because a JSON array is not dtype-tagged (see _inline_vector_bytes and the validator README's stage-1 row). VER104 measures three distinct quantities and this fixture exercises exactly one of them \u2014 the single-vector advisory (6 MiB of decoded payload), which 1,048,577 components exceed at 8,388,616 proxy bytes. It does NOT trip the document advisory: 2.1 MB of serialized text is well under 10 MiB, which is the point of keeping the two numbers on separate scales. The component count is a historical value from when the vector advisory stood at 8 MiB; the smallest inline vector that reaches the current 6 MiB advisory is 786,433 components, and the fixture is left as it is because re-cutting it would change nothing about what it demonstrates. Every component is 0 because the rule under test depends only on the component count, and the space declares normalization 'none' so a zero vector contradicts nothing."
+    },
+    {
+      "file": "invalid/ver105-record-size-exceeded.json",
+      "target_code": "VER105",
+      "schema": "1.1-draft",
+      "description": "An inline vector of 786,433 components: 6,291,464 bytes at the documented 8-bytes-per-component proxy, one component past the 6 MiB single-vector limit of draft section 7 quantity (c), which is a MUST NOT.",
+      "expect_codes": [
+        "VER105"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. VER104 is suppressed on a 1.1-draft run \u2014 the same three quantities are advisory under 1.0.x and normative under 1.1, and a severity that changes with the selected schema is not expressible in one code \u2014 so exactly one of {VER104} and {VER105, VER106} can fire on any record. One VER105 issue is emitted per quantity tripped; this record trips only (c). The descriptor's dim equals the vector's length, or VER603 would join. The file is about 1.5 MB, the cheapest construction that trips a single section 7 quantity: quantity (b) needs roughly 8 MB of base64 text to reach the same limit, and quantity (a) needs 10 MiB of document."
+    },
+    {
+      "file": "invalid/ver106-size-should-cap-exceeded.json",
+      "target_code": "VER106",
+      "schema": "1.1-draft",
+      "description": "65 embeddings, one past the 64-entry cap of draft section 7 quantity (d). The quantity measured is entries, not bytes: a record this wide is a bundle of records wearing one record's identity.",
+      "expect_codes": [
+        "VER106"
+      ],
+      "expect_severity": "warning",
+      "notes": "1.1-draft only. Section 7 states (d) and (e) as SHOULD NOT, so exceeding one does not make the record non-conformant and the finding is a warning \u2014 which is the reason it is a separate code from VER105 rather than a second severity on one. Every embedding is the same well-formed canonical visual vector; nothing else about the record is wrong."
+    },
+    {
+      "file": "invalid/ver201-schema-invalid.json",
+      "target_code": "VER201",
+      "description": "generator.version carries a number where the schema requires a string. One schema violation, one VER201, pointing at the offending location.",
+      "expect_codes": [
+        "VER201"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver202-format-invalid.json",
+      "target_code": "VER202",
+      "description": "created_at uses a space instead of the RFC 3339 'T' separator. JSON Schema 2020-12 treats format as an annotation; the VERA profile asserts it (annex E23).",
+      "expect_codes": [
+        "VER202"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver301-level-absent.json",
+      "target_code": "VER301",
+      "description": "No conformance_level claim. The record is validated at L0 and told so; a record that makes no claim cannot be relied on for metadata or provenance.",
+      "expect_codes": [
+        "VER301"
+      ],
+      "expect_severity": "warning"
+    },
+    {
+      "file": "invalid/ver302-raw-preservation-missing.json",
+      "target_code": "VER302",
+      "description": "L1 declares EXIF and ICC present while metadata.raw preserves nothing. At L1+ 'present' means the byte-exact segment is carried (spec section 7.1, annex E11).",
+      "expect_codes": [
+        "VER302"
+      ],
+      "expect_severity": "error",
+      "notes": "VER302 is reported once per family declared present with no corresponding raw segment (annex E11), so this record draws two VER302 issues \u2014 one at /metadata/availability/exif, one at /metadata/availability/icc. expect_codes is a set of codes, not a count of issues."
+    },
+    {
+      "file": "invalid/ver303-availability-incomplete.json",
+      "target_code": "VER303",
+      "description": "L1 states three families and omits iptc and c2pa. Silence is not an availability state; 'unknown' exists for the honest case.",
+      "expect_codes": [
+        "VER303"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver304-normalized-view-missing.json",
+      "target_code": "VER304",
+      "description": "L2 claim with no reconciled metadata.normalized view. L2 is the level at which a consumer may read metadata as reconciled fact.",
+      "expect_codes": [
+        "VER304"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver305-trust-entry-missing.json",
+      "target_code": "VER305",
+      "description": "The reconciled view asserts dc:description with no trust entry. Every assertion in the normalized view carries a tier (spec section 7.4).",
+      "expect_codes": [
+        "VER305"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver306-provenance-missing.json",
+      "target_code": "VER306",
+      "description": "An L3 claim with no provenance block at all: no acquisition, no chain, no C2PA status, no signature. Two VER306 issues plus the other L3 gates.",
+      "expect_codes": [
+        "VER306",
+        "VER307",
+        "VER308"
+      ],
+      "expect_severity": "error",
+      "notes": "VER307 and VER308 are unavoidable collateral of an absent provenance block."
+    },
+    {
+      "file": "invalid/ver307-c2pa-status-missing.json",
+      "target_code": "VER307",
+      "description": "L3 provenance with acquisition and chain but no c2pa block. Omitting the block is not the same as reporting that no manifest was found.",
+      "expect_codes": [
+        "VER307",
+        "VER308"
+      ],
+      "expect_severity": "error",
+      "notes": "VER308 (signature SHOULD be present at L3) accompanies every unsigned L3 fixture."
+    },
+    {
+      "file": "invalid/ver308-signature-absent.json",
+      "target_code": "VER308",
+      "description": "A complete, conformant L3 record carrying no signature. Signing is a SHOULD at L3, so this is a warning and the record stays conformant.",
+      "expect_codes": [
+        "VER308"
+      ],
+      "expect_severity": "warning"
+    },
+    {
+      "file": "invalid/ver401-duplicate-space-id.json",
+      "target_code": "VER401",
+      "description": "The same space_id declared twice. A space_id names one immutable configuration, so a record may declare it once (annex E18).",
+      "expect_codes": [
+        "VER401"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver402-space-registry-conflict.json",
+      "target_code": "VER402",
+      "description": "The in-record descriptor for a published space_id changes the resize interpolation. Detectable only against the registry the space was published in.",
+      "expect_codes": [
+        "VER402"
+      ],
+      "expect_severity": "error",
+      "spaces_registry": "registries/conflicting-spaces.json",
+      "notes": "Run with --spaces registries/conflicting-spaces.json. Without the registry this record is self-consistent and passes.",
+      "also": [
+        {
+          "spaces_registry": null,
+          "expect_codes": [],
+          "expect_severity": "none",
+          "note": "immutability is a claim about the registry, invisible inside one record"
+        }
+      ]
+    },
+    {
+      "file": "invalid/ver403-embedding-space-id-malformed.json",
+      "target_code": "VER403",
+      "description": "An embedding cites a human-readable model name instead of a space_id. The name matches no descriptor pattern and no declared space.",
+      "expect_codes": [
+        "VER403",
+        "VER501"
+      ],
+      "expect_severity": "error",
+      "notes": "VER501 is inherent: a malformed space_id cannot match a declared descriptor, because spaces[] entries are pattern-constrained by the schema."
+    },
+    {
+      "file": "invalid/ver404-space-reference-missing.json",
+      "target_code": "VER404",
+      "description": "A space descriptor with no reference set and tolerance. Such a space cannot back a conformance claim (annex E13); a warning in the 1.0 profile.",
+      "expect_codes": [
+        "VER404"
+      ],
+      "expect_severity": "warning"
+    },
+    {
+      "file": "invalid/ver405-visual-preprocessing-underspecified.json",
+      "target_code": "VER405",
+      "description": "A visual space whose preprocessing omits resize, interpolation and crop. The pixel path is not reproducible from the descriptor.",
+      "expect_codes": [
+        "VER405"
+      ],
+      "expect_severity": "warning"
+    },
+    {
+      "file": "invalid/ver406-hamming-tolerance-exceeds-dim.json",
+      "target_code": "VER406",
+      "schema": "1.1-draft",
+      "description": "A binary space declaring reference.tolerance_hamming_max 9 over dim 8. A tolerance at or above the vector's own width admits every possible vector, so the conformance claim it states is unfalsifiable.",
+      "expect_codes": [
+        "VER406"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only; tolerance_hamming_max does not exist in 1.0.x. The schema bounds the member below (integer >= 0) and cannot bound it above, because the bound is the sibling dim and comparing two members is outside JSON Schema (draft section 15.4)."
+    },
+    {
+      "file": "invalid/ver407-bundle-manifest-digest-mismatch.json",
+      "target_code": "VER407",
+      "schema": "1.1-draft",
+      "description": "A model bundle whose files[] is correct and whose manifest_sha256 is the digest of an earlier revision of the same list \u2014 config.json was one octet shorter when the manifest was computed.",
+      "expect_codes": [
+        "VER407"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. Every bundle file's bytes are the ASCII string 'ver-conformance-corpus/1.1-draft bundle-file <path>', so byte_length and sha256 both recompute; manifest_sha256 is the real ver-bundle-manifest/1 digest \u2014 SHA-256 over the RFC 8785 JCS form of {\"files\": [...]} \u2014 of that list with config.json's byte_length reduced by one. Under bundle_digest_alg 'ver-bundle-manifest/1' the identifier is the construction, so there is no second reading under which both values are right; a bundle naming any other algorithm is never recomputed."
+    },
+    {
+      "file": "invalid/ver408-bundle-paths-unsorted-or-duplicate.json",
+      "target_code": "VER408",
+      "schema": "1.1-draft",
+      "description": "A model bundle whose two entries are stored in descending path order. Draft section 4.2 requires entries pre-sorted byte-wise ascending by the UTF-8 encoding of path.",
+      "expect_codes": [
+        "VER408"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. manifest_sha256 is recomputed over the reordered array, so VER407 does not fire: the manifest is internally consistent and still non-conformant, which is exactly the case a digest alone cannot catch. A verifier checks the order it received rather than sorting first, so a manifest whose order was tampered with is detected rather than quietly repaired."
+    },
+    {
+      "file": "invalid/ver409-bundle-path-illegal.json",
+      "target_code": "VER409",
+      "schema": "1.1-draft",
+      "description": "A bundle file path carrying a backslash separator, outside the printable portable set [A-Za-z0-9._-] with '/' as the only separator (draft section 4.2).",
+      "expect_codes": [
+        "VER201",
+        "VER409"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. (also emits VER201, twice) $defs.portablePath rejects the path under both of its halves \u2014 the anchored pattern and the complement-class 'not' \u2014 so two VER201 issues accompany the single VER409. The profile restates the grammar for VER705's reason: a bundle path is handed to a filesystem, and the profile must still refuse a traversal or an embedded NUL when the schema in play is relaxed, future or somebody else's. manifest_sha256 is computed over the files as carried, so VER407 stays silent."
+    },
+    {
+      "file": "invalid/ver410-artifact-digest-mismatch.json",
+      "target_code": "VER410",
+      "schema": "1.1-draft",
+      "description": "A joint_visual_text space whose model.artifacts[] pins the tokenizer at one digest while preprocessing.tokenizer_sha256 names another. One space cannot have two tokenizers: whichever file the vectors came from, the other statement is false.",
+      "expect_codes": [
+        "VER410"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only; model.artifacts[] is an ADR-0007 addition. Both values are real digests \u2014 the artifact's is SHA-256 of the ASCII string 'ver-conformance-corpus/1.1-draft artifact tokenizer.json', the preprocessing member's is SHA-256 of 'ver-conformance-corpus/1.1-draft tokenizer corpus-sentencepiece'. The canonical visual embedding sits in a joint_visual_text space, which VER701 accepts under 1.1-draft and not under 1.0.x, whose kind enum has no such value."
+    },
+    {
+      "file": "invalid/ver411-descriptor-digest-mismatch.json",
+      "target_code": "VER411",
+      "schema": "1.1-draft",
+      "description": "A space descriptor whose inline copy loosened reference.tolerance_cosine from 0.999 to 0.995 after descriptor_sha256 was computed over the published form.",
+      "expect_codes": [
+        "VER411"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only; descriptor_sha256 is an SPEC-22 addition. The carried digest is the real SHA-256 over the RFC 8785 JCS serialization of the published descriptor with its own descriptor_sha256 member removed. Detecting exactly this drift is what the member is for (draft section 11.3); the loosened value is still above the 0.99 float floor, so the record stays schema-valid and only the digest catches it."
+    },
+    {
+      "file": "invalid/ver501-undeclared-space.json",
+      "target_code": "VER501",
+      "description": "A contextual embedding cites a well-formed text space_id that the record never declares. A vector whose space is undeclared is not interpretable.",
+      "expect_codes": [
+        "VER501"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver601-dim-mismatch.json",
+      "target_code": "VER601",
+      "description": "The embedding states dim 512 in a 768-dimensional space. When an embedding states dim it MUST equal the descriptor's (annex E24).",
+      "expect_codes": [
+        "VER601"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver602-dtype-mismatch.json",
+      "target_code": "VER602",
+      "description": "The embedding claims fp16 in an fp32 space. A different dtype is a different space, not a different serialization of the same one.",
+      "expect_codes": [
+        "VER602"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver603-inline-vector-length-mismatch.json",
+      "target_code": "VER603",
+      "description": "An inline vector carrying 15 components for a 16-dimensional space. A truncated vector indexes silently and retrieves nonsense.",
+      "expect_codes": [
+        "VER603"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver604-b64-vector-byte-length-mismatch.json",
+      "target_code": "VER604",
+      "description": "Decodable base64 that yields 60 bytes where dim 16 at fp32 requires 64. The payload is one component short.",
+      "expect_codes": [
+        "VER604"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver605-ref-byte-length-mismatch.json",
+      "target_code": "VER605",
+      "description": "vector_ref.byte_length disagrees with dim 768 at fp32 (3072 bytes). The referenced blob is ambiguous before it is ever fetched.",
+      "expect_codes": [
+        "VER605"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver606-dim-dtype-unstated.json",
+      "target_code": "VER606",
+      "description": "The embedding omits dim and dtype and inherits them from the descriptor. Legal in VER 1.0, mandatory for 1.1 records (ADR-0008).",
+      "expect_codes": [
+        "VER606"
+      ],
+      "expect_severity": "warning"
+    },
+    {
+      "file": "invalid/ver608-vector-carriage-not-exactly-one.json",
+      "target_code": "VER608",
+      "schema": "1.1-draft",
+      "description": "An embedding carrying both an inline vector and a vector_b64 of the same four fp32 components. Two carriage forms are two vectors with one identity, and no rule in this standard says which of them a consumer indexes.",
+      "expect_codes": [
+        "VER201",
+        "VER608"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. (also emits VER201) The schema's oneOf over vector / vector_b64 / vector_ref rejects the same record; the profile restates it for VER705's reason. Both payloads are individually correct \u2014 four components, and sixteen little-endian octets \u2014 so no length rule fires and the fixture demonstrates the carriage defect alone."
+    },
+    {
+      "file": "invalid/ver609-binary-vector-inline.json",
+      "target_code": "VER609",
+      "schema": "1.1-draft",
+      "description": "A binary space's canonical visual embedding carrying an inline JSON vector of exactly dim components. A JSON array cannot represent packed bits, and expanding them to plus or minus one floats publishes a different object from the one the space defines (ADR-0008).",
+      "expect_codes": [
+        "VER201",
+        "VER609"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. (also emits VER201) The schema encodes the same refusal as if dtype is 'binary' then not required [vector]. The array carries exactly dim components, so VER603 stays silent and the fixture is about the carriage form rather than the length."
+    },
+    {
+      "file": "invalid/ver701-canonical-visual-in-nonvisual-space.json",
+      "target_code": "VER701",
+      "description": "A canonical visual embedding produced in a text space. That is not a weaker claim than a pixel-derived vector, it is a false one.",
+      "expect_codes": [
+        "VER701"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver702-contextual-in-nontext-space.json",
+      "target_code": "VER702",
+      "description": "A contextual (text-derived) embedding pointing at the visual space. Layer 3 vectors are never computed by the visual tower.",
+      "expect_codes": [
+        "VER702"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver703-fused-in-nonfused-space.json",
+      "target_code": "VER703",
+      "description": "A fused vector declared in the visual space it was fused from. Fusion produces a new space; it does not inherit an input's identity.",
+      "expect_codes": [
+        "VER703"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver704-fused-recipe-invalid.json",
+      "target_code": "VER704",
+      "description": "A fused recipe naming a text space the record never declares. recipe.inputs are space_ids declared in the same record (annex E20).",
+      "expect_codes": [
+        "VER704"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver705-no-canonical-visual-embedding.json",
+      "target_code": "VER705",
+      "description": "A record carrying only a contextual vector. Every VER record MUST carry the pixel-derived embedding that anchors it (spec section 11, all levels).",
+      "expect_codes": [
+        "VER201",
+        "VER705"
+      ],
+      "expect_severity": "error",
+      "notes": "VER201 comes from the schema's embeddings 'contains' constraint; VER705 is the profile's defense-in-depth restatement of it."
+    },
+    {
+      "file": "invalid/ver801-pdq-length.json",
+      "target_code": "VER801",
+      "description": "A 128-bit value declared as pdq/1.0. PDQ is 256-bit: 64 lowercase hex characters, never truncated or prefixed.",
+      "expect_codes": [
+        "VER201",
+        "VER801"
+      ],
+      "expect_severity": "error",
+      "notes": "Under --schema 1.0.0 only VER801 fires: the 1.0.0 schema's perceptual pattern carries no length bound. That gap is exactly what the 1.0.1 correction closes.",
+      "also": [
+        {
+          "schema": "1.0.0",
+          "expect_codes": [
+            "VER801"
+          ],
+          "expect_severity": "error"
+        }
+      ]
+    },
+    {
+      "file": "invalid/ver802-phash-length.json",
+      "target_code": "VER802",
+      "description": "A 32-bit value declared as phash-dct/64. The DCT pHash in VER 1.0 is 64-bit: exactly 16 lowercase hex characters.",
+      "expect_codes": [
+        "VER201",
+        "VER802"
+      ],
+      "expect_severity": "error",
+      "notes": "Under --schema 1.0.0 only VER802 fires; see ver801-pdq-length.",
+      "also": [
+        {
+          "schema": "1.0.0",
+          "expect_codes": [
+            "VER802"
+          ],
+          "expect_severity": "error"
+        }
+      ]
+    },
+    {
+      "file": "invalid/ver901-stripped-suspected-without-basis.json",
+      "target_code": "VER901",
+      "description": "EXIF declared stripped_suspected with no availability_basis. An unexplained accusation against the acquisition channel is not auditable.",
+      "expect_codes": [
+        "VER901"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver902-raw-index-not-unique-or-contiguous.json",
+      "target_code": "VER902",
+      "schema": "1.1-draft",
+      "description": "Two xmp segments of one family both claiming index 0. Ordinals within a family are unique and contiguous from 0, so that ascending index reassembles exactly the segments the record carries and nothing is silently dropped or duplicated (draft section 10.1).",
+      "expect_codes": [
+        "VER902"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only; metadata.raw[].index is an SCH-16 addition. Both entries carry index, so the schema's per-family requirement is satisfied and VER903 does not fire; uniqueness compares two array members, which is outside JSON Schema. The two payloads are real XMP container bytes \u2014 a main packet, and an extended-packet continuation carrying its http://ns.adobe.com/xmp/extension/ NUL identifier prefix and GUID \u2014 and each sha256 is the digest of the octets carried beside it."
+    },
+    {
+      "file": "invalid/ver903-raw-index-missing-multisegment.json",
+      "target_code": "VER903",
+      "schema": "1.1-draft",
+      "description": "An xmp family occupying two segments where only the first carries index; reassembly of the second would depend on array order alone.",
+      "expect_codes": [
+        "VER201",
+        "VER903"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. (also emits VER201) The 1.1 schema encodes the per-family requirement \u2014 a family with two or more entries requires index on every entry of that family \u2014 so the schema refuses the same record; the profile restates it. The one stated ordinal is the contiguous run [0], so VER902 stays silent."
+    },
+    {
+      "file": "invalid/ver904-raw-ref-digest-mismatch.json",
+      "target_code": "VER904",
+      "schema": "1.1-draft",
+      "description": "A by-reference icc segment whose own sha256 is not the digest its bytes_ref names. Both are the digest of the decoded segment octets (annex E11), so the entry describes bytes its own reference does not fetch.",
+      "expect_codes": [
+        "VER904"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only; metadata.raw[].bytes_ref is an SCH-16 addition. The reference names the true digest and length of the segment bytes 'ver-conformance-corpus/1.1-draft icc-segment corpus-icc.png'; the entry's own sha256 is the true digest of a previous revision of that segment. No network I/O is performed or needed \u2014 the two digests disagree inside the record. bytes_ref rather than bytes, or VER1302 would join."
+    },
+    {
+      "file": "invalid/ver1001-redaction-availability-inconsistent.json",
+      "target_code": "VER1001",
+      "description": "A redaction ledger entry with no family marked 'redacted'. A consumer cannot then distinguish redaction from absence (spec section 7.2).",
+      "expect_codes": [
+        "VER1001"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver1002-redaction-missing-salted-hash.json",
+      "target_code": "VER1002",
+      "description": "Redaction without proof: no salted_sha256, so the removal cannot be matched against a known value on challenge. Warning while ADR-0006 is open.",
+      "expect_codes": [
+        "VER1002"
+      ],
+      "expect_severity": "warning"
+    },
+    {
+      "file": "invalid/ver1003-conflict-sources-not-distinct.json",
+      "target_code": "VER1003",
+      "description": "Two readings of the same source recorded as a metadata conflict. That is a producer bug; a conflict is a disagreement between distinct sources.",
+      "expect_codes": [
+        "VER1003"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver1004-conflict-field-untracked.json",
+      "target_code": "VER1004",
+      "description": "A conflicted field with no trust entry at L2. The reconciliation outcome is unattributable: a consumer cannot tell which source won.",
+      "expect_codes": [
+        "VER1004"
+      ],
+      "expect_severity": "warning"
+    },
+    {
+      "file": "invalid/ver1005-redacted-family-raw-present.json",
+      "target_code": "VER1005",
+      "description": "A record claiming an IPTC redaction while still shipping the raw iptc-iim segment. Nothing was redacted; the leak was merely annotated (annex E15).",
+      "expect_codes": [
+        "VER1005"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver1006-producer-performed-without-commitment.json",
+      "target_code": "VER1006",
+      "schema": "1.1-draft",
+      "description": "A redaction ledger entry stating 'producer_performed' with neither commitment_sha256 nor commitment_alg. The Producer held the value, so a commitment over it is possible; a producer-performed redaction without one asserts a removal with nothing behind it (draft section 5.2).",
+      "expect_codes": [
+        "VER201",
+        "VER1006"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. (also emits VER201, twice \u2014 the schema requires both members) The ledger is paired with availability.exif 'redacted', or VER1001 would join, and normalized_pointer resolves to the redacted-value object standing in for the removed value, or VER1009 would. VER1002 does not fire on a 1.1-draft run at all: salted_sha256 does not exist there, so no record could be VER1002-clean and VER201-clean at once."
+    },
+    {
+      "file": "invalid/ver1007-upstream-withheld-with-commitment.json",
+      "target_code": "VER1007",
+      "schema": "1.1-draft",
+      "description": "A redaction ledger entry stating 'upstream_withheld' while carrying a commitment. The Producer never received the value, so a commitment over it cannot exist: this one attests to something nobody held.",
+      "expect_codes": [
+        "VER201",
+        "VER1007"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. (also emits VER201, twice \u2014 the schema forbids both members) The ledger is paired with availability.iptc 'upstream_withheld', the 1.1 availability state ADR-0006 adds, or VER1001 would join. The in-view object carries no commitment, so VER1008 has nothing to compare and stays silent. The commitment value itself is a real ver-redaction-commitment/1 digest \u2014 the defect is that it is asserted at all."
+    },
+    {
+      "file": "invalid/ver1008-commitment-mismatch-ledger-vs-view.json",
+      "target_code": "VER1008",
+      "schema": "1.1-draft",
+      "description": "The ledger and the normalized view commit to two different digests for one removed value. One removed value has one commitment; two digests mean at most one of them binds the Producer to what was actually removed.",
+      "expect_codes": [
+        "VER1008"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. Both digests are real ver-redaction-commitment/1 constructions per draft section 5.3 over the corpus salt recipe (conformance/README.md): the ledger commits to the value as the view carries it, \"51.4779N\", and the view's copy commits to \"51.4779 N\", an earlier spelling. Comparing two members is outside JSON Schema, so nothing here is schema-invalid and the profile is the only thing that catches it. The salt appears nowhere in the record, which is the entire mechanism."
+    },
+    {
+      "file": "invalid/ver1009-redaction-pointer-unresolvable.json",
+      "target_code": "VER1009",
+      "schema": "1.1-draft",
+      "description": "A ledger entry whose normalized_pointer names /exif:GPSLongitude, a key the normalized view does not carry. The key is retained in metadata.normalized precisely so a Consumer can tell 'removed by the Producer' from 'never present'; a pointer that lands nowhere removes that distinction again.",
+      "expect_codes": [
+        "VER1009"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. The value is a syntactically valid RFC 6901 JSON Pointer, so the schema's pattern is satisfied and only resolution fails. The same commitment is carried in the ledger and in the view, so VER1008 stays silent, and the availability pairing is complete, so VER1001 does."
+    },
+    {
+      "file": "invalid/ver1101-c2pa-raw-present-status-missing.json",
+      "target_code": "VER1101",
+      "description": "A preserved C2PA segment, availability 'present', and a status of 'missing'. A consumer filtering on status would silently discard verifiable content.",
+      "expect_codes": [
+        "VER1101",
+        "VER1103"
+      ],
+      "expect_severity": "error",
+      "notes": "VER1101 and VER1103 overlap by design: one record can exhibit both readings of the same inconsistency."
+    },
+    {
+      "file": "invalid/ver1102-c2pa-valid-without-manifest-hash.json",
+      "target_code": "VER1102",
+      "description": "A 'valid' C2PA verdict with no manifest_sha256. The manifest that was validated cannot be identified after the fact.",
+      "expect_codes": [
+        "VER1102"
+      ],
+      "expect_severity": "warning"
+    },
+    {
+      "file": "invalid/ver1103-c2pa-state-inconsistent.json",
+      "target_code": "VER1103",
+      "description": "An L3 record whose availability.c2pa is 'present' and whose c2pa segment is preserved, while it carries no provenance.c2pa object at all. VER 1.0 has no 'unverifiable' state, so a producer that cannot complete validation omits the block (annex E28) \u2014 and at L3, where provenance.c2pa is required, omitting it contradicts the record's own evidence.",
+      "expect_codes": [
+        "VER307",
+        "VER308",
+        "VER1101",
+        "VER1103"
+      ],
+      "expect_severity": "error",
+      "notes": "The absence arm of VER1103 is scoped to L3 by annex E28, so the fixture must claim L3 \u2014 which drags in every other L3 gate the missing block fails: VER307 (L3 requires provenance.c2pa.status), VER1101 (the same absence read as a false 'no manifest' claim), and VER308 (every unsigned L3 fixture warns). The `also` run at --level L1 is the other half of the claim: below L3 this exact record is conformant and silent, which is the behaviour E28 instructs a producer to adopt.",
+      "also": [
+        {
+          "level": "L1",
+          "expect_codes": [],
+          "expect_severity": "none",
+          "note": "below L3 a record may observe that a manifest is present without having validated it; the absence arm does not fire"
+        }
+      ]
+    },
+    {
+      "file": "invalid/ver1201-chain-not-chronological.json",
+      "target_code": "VER1201",
+      "description": "A chain event timestamped before the event recorded ahead of it. Chain timestamps are non-decreasing; equal is permitted, backwards is not (annex E16).",
+      "expect_codes": [
+        "VER1201"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver1202-chain-precedes-acquisition.json",
+      "target_code": "VER1202",
+      "description": "An import event 22 seconds before the acquisition it records. Nothing can be done to an asset before it exists in the producer's custody.",
+      "expect_codes": [
+        "VER1202"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver1203-record-precedes-chain.json",
+      "target_code": "VER1203",
+      "description": "created_at precedes the last chain event, so the record claims to predate its own contents. SHOULD-level, hence a warning (annex E16).",
+      "expect_codes": [
+        "VER1203"
+      ],
+      "expect_severity": "warning"
+    },
+    {
+      "file": "invalid/ver1204-action-order-implausible.json",
+      "target_code": "VER1204",
+      "description": "The first embed precedes the first normalize. The timestamps agree with the order, so only the causal story is implausible: a warning, not an error.",
+      "expect_codes": [
+        "VER1204"
+      ],
+      "expect_severity": "warning"
+    },
+    {
+      "file": "invalid/ver1205-bare-action-token-unregistered.json",
+      "target_code": "VER1205",
+      "schema": "1.1-draft",
+      "registry": "registries/test-registry-snapshot.json",
+      "description": "A bare action token 'sidecar_merge' \u2014 outside the sixteen this specification defines \u2014 in a record that names a registry snapshot which does not register it.",
+      "expect_codes": [
+        "VER1205"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. Run with --registry registries/test-registry-snapshot.json. That snapshot is corpus-local and carries no authority whatsoever \u2014 it is deliberately not standards/registry/, so no expected code here depends on a governed artifact that changes on its own schedule. It lists 'watermark' active and nothing else, so 'sidecar_merge' is a token that was never registered rather than one that was deprecated; deprecation never invalidates history. provenance.registry.sha256 is the real SHA-256 over the RFC 8785 JCS form of the snapshot document. Without the flag the same record is VER1206, a warning \u2014 which is what the second run pins.",
+      "also": [
+        {
+          "registry": null,
+          "expect_codes": [
+            "VER1206"
+          ],
+          "expect_severity": "warning",
+          "note": "no snapshot supplied: membership is unverified rather than refuted, and the record stays conformant"
+        }
+      ]
+    },
+    {
+      "file": "invalid/ver1206-registry-membership-unverified.json",
+      "target_code": "VER1206",
+      "schema": "1.1-draft",
+      "description": "A bare action token 'watermark' in a record that names a registry snapshot, validated with no snapshot supplied. Membership was not checked, so the event stays opaque and the record stays conformant.",
+      "expect_codes": [
+        "VER1206"
+      ],
+      "expect_severity": "warning",
+      "notes": "1.1-draft only. This is the mirror of the VER1403 pattern \u2014 an unverified claim is reported as unverified and never as refuted. Draft section 2.3 states the reason outright: a consumer that rejects a record because it could not fetch a registry has converted an extensible value space back into a closed enum, unilaterally, and this validator performs no network I/O so it is exactly that consumer unless the operator hands it the snapshot. With --registry registries/test-registry-snapshot.json, where 'watermark' is an active entry, the record emits nothing at all.",
+      "also": [
+        {
+          "registry": "registries/test-registry-snapshot.json",
+          "expect_codes": [],
+          "expect_severity": "none",
+          "note": "with the corpus-local snapshot supplied the token resolves as active and the record is clean"
+        }
+      ]
+    },
+    {
+      "file": "invalid/ver1207-sign-event-without-signature.json",
+      "target_code": "VER1207",
+      "schema": "1.1-draft",
+      "description": "A chain carrying a 'sign' event on a record that carries no provenance.signature. A signing that left no artifact is indistinguishable from a false claim that one happened (draft section 2.3.3).",
+      "expect_codes": [
+        "VER201",
+        "VER1207"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only; 'sign' is one of the ten action tokens the 1.1 specification registers. (also emits VER201) The schema encodes the same implication, so the profile rule is defense in depth. The event states target 'record', which the schema requires of a sign event, so that conditional is satisfied and the missing signature is the only fault. The converse is deliberately not required: a signed record need not carry a sign event."
+    },
+    {
+      "file": "invalid/ver1301-b64-vector-undecodable.json",
+      "target_code": "VER1301",
+      "description": "A vector_b64 payload in the URL-safe alphabet with its padding stripped. Standard RFC 4648 base64 with correct padding is required.",
+      "expect_codes": [
+        "VER1301"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver1302-raw-segment-sha256-mismatch.json",
+      "target_code": "VER1302",
+      "description": "The EXIF segment's declared sha256 is not the digest of the bytes carried beside it. Recompute over exactly the bytes as stored (annex E11).",
+      "expect_codes": [
+        "VER1302"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver1305-source-ref-content-hash-mismatch.json",
+      "target_code": "VER1305",
+      "description": "source_bytes_ref points at bytes whose digest is not identity.content_hash. The reference does not resolve to the asset this record identifies (annex E25).",
+      "expect_codes": [
+        "VER1305"
+      ],
+      "expect_severity": "error"
+    },
+    {
+      "file": "invalid/ver1401-signature-object-invalid.json",
+      "target_code": "VER1401",
+      "description": "A signature object whose value is an empty string. The shape is schema-legal and semantically void, so the profile rejects it before any verification is attempted.",
+      "expect_codes": [
+        "VER1401"
+      ],
+      "expect_severity": "error",
+      "notes": "Signature carriage is not level-gated, so this fixture stays at L1 and exercises stage 15 alone."
+    },
+    {
+      "file": "invalid/ver1402-signature-verification-failed.json",
+      "target_code": "VER1402",
+      "description": "A real Ed25519 signature over an earlier revision of this record: created_at was moved forward after signing, so the JCS payload no longer matches.",
+      "expect_codes": [
+        "VER1402"
+      ],
+      "expect_severity": "error",
+      "signature_key": "keys/corpus-signing-key.pub.pem",
+      "notes": "Run with --signature-key keys/corpus-signing-key.pub.pem. Without a key the same file yields VER1403 instead.",
+      "also": [
+        {
+          "signature_key": null,
+          "expect_codes": [
+            "VER1403"
+          ],
+          "expect_severity": "warning",
+          "note": "no key supplied: the signature is reported as unverified, never as valid"
+        }
+      ]
+    },
+    {
+      "file": "invalid/ver1403-signature-unverified.json",
+      "target_code": "VER1403",
+      "description": "A well-formed, genuinely valid detached JWS validated with no key supplied. The profile reports the signature as unverified rather than implying it was checked.",
+      "expect_codes": [
+        "VER1403"
+      ],
+      "expect_severity": "warning",
+      "also": [
+        {
+          "signature_key": "keys/corpus-signing-key.pub.pem",
+          "expect_codes": [],
+          "expect_severity": "none",
+          "note": "with the corpus public key the signature verifies and the record is clean"
+        }
+      ]
+    },
+    {
+      "file": "invalid/ver1601-lineage-duplicate-parent.json",
+      "target_code": "VER1601",
+      "schema": "1.1-draft",
+      "description": "Draft section 3.5 fixture 3 \u2014 the same parent listed twice, identical in every member. The ruling is error: a parent contributed once is one parent, and listing it twice either double-counts a contribution or hides that one entry was meant to name a different asset.",
+      "expect_codes": [
+        "VER1601"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. Two VER1601 issues are emitted, one per globally resolvable identifier that repeats \u2014 record_uri and content_hash \u2014 and the set of codes is still exactly {VER1601}. Where one asset genuinely contributed twice, the same panel placed at two positions, that belongs in the recipe envelope, which is where placement lives (draft section 3.4); the parents array states parentage, not multiplicity."
+    },
+    {
+      "file": "invalid/ver1602-lineage-exported-pixel-hash-mismatch.json",
+      "target_code": "VER1602",
+      "schema": "1.1-draft",
+      "description": "Draft section 3.5 fixture 4 \u2014 relation 'exported' with parent and record pixel_hash values that differ. An export is a re-encoding: the bytes change and the Canonical Buffer does not, so two different pixel hashes refute the relation the entry asserts.",
+      "expect_codes": [
+        "VER1602"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. Both digests state cpnp_version '1.0', so they belong to one pixel-hash universe and are comparable; the rule stays silent when the two versions differ (annex E10), and a fixture built across universes would demonstrate nothing. The parent carries content_hash, or VER1606 would join."
+    },
+    {
+      "file": "invalid/ver1603-lineage-self-parent.json",
+      "target_code": "VER1603",
+      "schema": "1.1-draft",
+      "description": "Draft section 3.5 fixture 5 \u2014 a parent reference whose content_hash is this record's own identity.content_hash.value. An asset is not its own parent, and a graph that says so has no root to walk back to.",
+      "expect_codes": [
+        "VER1603"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. The entry is well formed and globally resolvable \u2014 record_uri plus producer_id and record_id \u2014 which is what makes this a graph statement rather than a shape defect. A record describing an unchanged re-publication of its own bytes needs no lineage block at all."
+    },
+    {
+      "file": "invalid/ver1604-lineage-cycle.json",
+      "target_code": "VER1604",
+      "schema": "1.1-draft",
+      "lineage_peers": [
+        "lineage-peers/lineage-cycle-peer.json"
+      ],
+      "description": "Draft section 3.5 fixture 6 \u2014 a two-record cycle. This record names the peer by record_uri and the peer names this record back by content_hash, so a single run exercises the detection rule on each edge type.",
+      "expect_codes": [
+        "VER1604"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. Run with --lineage-peer lineage-peers/lineage-cycle-peer.json. Peers live in conformance/lineage-peers/ rather than valid/ or invalid/ because they are inputs to a run, not fixtures with an expected result of their own. The peer is reached by record_uri through the uri on its publish chain event, which is what draft section 2.3.2 adds uri for; pixel_hash is deliberately never an identifier here, because annex E27 makes it a grouping key that resolves to a candidate and never to an identity. Nothing is fetched: with no peer supplied the same record is conformant and the cycle is invisible rather than presumed absent, which is what the second run pins. Both parent references carry content_hash, so VER1606 does not join \u2014 a cycle expressed only through record_uri cannot avoid it.",
+      "also": [
+        {
+          "lineage_peers": null,
+          "expect_codes": [],
+          "expect_severity": "none",
+          "note": "no peers supplied: a cycle this validator cannot see is reported as nothing, and its silence never proves there is none"
+        }
+      ]
+    },
+    {
+      "file": "invalid/ver1605-lineage-recipe-uri-without-digest.json",
+      "target_code": "VER1605",
+      "schema": "1.1-draft",
+      "description": "Draft section 3.5 fixture 7 \u2014 lineage.recipe_uri with no recipe_sha256. A recipe URI without its digest names whatever that URI serves today, so 'verify the recipe before use' is unactionable and the fetch is unverifiable.",
+      "expect_codes": [
+        "VER201",
+        "VER1605"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. (also emits VER201) The schema encodes the same implication \u2014 recipe_uri present implies recipe_sha256 REQUIRED \u2014 and the profile restates it as defense in depth. The digest is a commitment and not a disclosure requirement, so publishing the URI is the optional half and the digest is not. Both parents carry content_hash, or VER1606 would join."
+    },
+    {
+      "file": "invalid/ver1606-lineage-parent-content-hash-absent.json",
+      "target_code": "VER1606",
+      "schema": "1.1-draft",
+      "description": "A parent named but not pinned: record_uri and producer_id/record_id resolve it, and no content_hash fixes what it resolved to. Whatever the reference resolves to later is what this record will appear to have descended from (ADR-0005).",
+      "expect_codes": [
+        "VER1606"
+      ],
+      "expect_severity": "warning",
+      "notes": "1.1-draft only. A warning by default, because a Producer may genuinely reference a parent whose bytes it never held. Under --profile high-trust the same finding is an error and the record is non-conformant: that single promotion is the whole content of vera-profile-high-trust/1.1-draft (standards/ver/1.1-draft/HIGH-TRUST-PROFILE.md), and the second run pins it. The promotion happens at report time and never mutates the code registry, so VER1606's registered severity stays 'warning'.",
+      "also": [
+        {
+          "profile": "high-trust",
+          "expect_codes": [
+            "VER1606"
+          ],
+          "expect_severity": "error",
+          "note": "the named high-trust profile promotes VER1606 to an error; nothing else about the record or the run changes"
+        }
+      ]
+    },
+    {
+      "file": "invalid/ver1010-upstream-withheld-family-raw-present.json",
+      "target_code": "VER1010",
+      "schema": "1.1-draft",
+      "description": "The iptc family is marked 'upstream_withheld' \u2014 the Producer never received its values \u2014 while a byte-exact iptc-iim segment is still preserved in metadata.raw. Bytes nobody received cannot be carried; the record contradicts its own account of itself.",
+      "expect_codes": [
+        "VER1010"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only (the state does not exist at 1.0.x). Same defect shape as VER1005, different availability state: VER1005 rejects the annotated leak, VER1010 rejects the impossible provenance story. The preserved segment is a real Photoshop IRB whose 8BIM 0x0404 resource holds a 2:80 By-line \u2014 the exact person-identifying value the ledger claims was never received."
+    },
+    {
+      "file": "invalid/ver1208-registry-snapshot-mismatch.json",
+      "target_code": "VER1208",
+      "schema": "1.1-draft",
+      "registry": "registries/test-registry-snapshot.json",
+      "description": "A record naming one registry snapshot, validated against a different one. The digest disagreement is reported once and membership stays unverified \u2014 a verdict computed against a snapshot the record does not cite would be a verdict about the wrong document (ADR-0004 C2).",
+      "expect_codes": [
+        "VER1206",
+        "VER1208"
+      ],
+      "expect_severity": "warning",
+      "notes": "1.1-draft only. Run with --registry registries/test-registry-snapshot.json; the record's provenance.registry.sha256 is a real digest of a documented corpus preimage that is deliberately NOT that snapshot's JCS digest. VER1205 must not fire in either direction off the wrong document, so the bare token 'watermark' stays VER1206-unverified exactly as if no snapshot had been supplied. Without the flag the mismatch is uncomputable and only VER1206 remains \u2014 the also-run pins that.",
+      "also": [
+        {
+          "registry": null,
+          "expect_codes": [
+            "VER1206"
+          ],
+          "expect_severity": "warning",
+          "note": "no snapshot supplied: nothing to compare, membership unverified as before"
+        }
+      ]
+    },
+    {
+      "file": "invalid/ver1011-redacted-source-embedding-carried.json",
+      "target_code": "VER1011",
+      "schema": "1.1-draft",
+      "description": "dc:description is redacted with a proper section 5.3 commitment - and the caption survives anyway, as a contextual embedding whose source.class is caption_human and whose source.text_sha256 is an unsalted digest of the withheld text. The redaction is annotated, not performed (section 5.4, ADR-0009).",
+      "expect_codes": [
+        "VER1011"
+      ],
+      "expect_severity": "error",
+      "notes": "1.1-draft only. The exact-field map withdraws caption_human/caption_auto/description with dc:description; carrying any of them is the mechanically decidable slice of section 5.4's MUST. Both the commitment and text_sha256 here are real digests of documented corpus preimages (rule 4) and per E26 stand in for measured values; the point the fixture pins is their COEXISTENCE - a framed salted commitment beside an unsalted oracle over the same withheld text."
+    }
+  ]
+}

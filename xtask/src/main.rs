@@ -9,6 +9,7 @@ mod ico;
 mod layers;
 mod parity;
 mod stats;
+mod ver;
 mod version;
 mod web;
 
@@ -33,10 +34,21 @@ commands:
   web [--serve [port]] [--dev]
                   build the browser app (apps/lightcraft-web) into <target>/web/;
                   --serve serves it on http://127.0.0.1:<port> (default 8080)
-  ci              fmt --check, clippy -D warnings, heif, test, parity refs, layers, assets, wasm (stops at first failure)
+  ci              fmt --check, clippy -D warnings, heif, test, parity refs, ver corpus + refsets, layers, assets, wasm
+                  (stops at first failure)
   corpus [--download]
                   show where test corpora live; --download fetches PngSuite and CC0 raw samples (raw.pixls.us) into corpus/ and checks their sha256
   stats [--exact] count tests and lines per crate (--exact: ask the test harness via `-- --list`)
+  ver corpus      run the VER decoder corpus (ver-decoder-corpus/1, profile verd-pillow/1) and print the
+                  evaluation; fails below the reproduced count the lightcraft-ver test pins
+  ver refsets     check the ten VER reference-set images' pixel_sha256
+  ver validate [--schema 1.0.1|1.1-draft] [--oracle auto|required|off] FILE...
+                  structural + profile validation of VER Records, then the upstream Python validator,
+                  found by VER_ORACLE_PY + VER_ORACLE_SRC, else VERA_CHECKOUT (a vera checkout: its
+                  .venv/bin/python or python3), else a sibling ../vera; fails on any error
+  ver oracle      run lightcraft-ver's oracle-agreement tests against the upstream Python validator
+  ver evaluation [--write [docs/ver-cpnp.md]]
+                  print the decoder-corpus evaluation; --write replaces the generated section of the doc
 ";
 
 fn main() -> ExitCode {
@@ -54,6 +66,7 @@ fn main() -> ExitCode {
         Some("ci") => cmd_ci(),
         Some("corpus") => cmd_corpus(rest.contains(&"--download")),
         Some("stats") => stats::run(&root(), rest.contains(&"--exact")),
+        Some("ver") => ver::run(&root(), &rest),
         Some("-h" | "--help" | "help") | None => {
             print!("{USAGE}");
             Ok(())
@@ -284,6 +297,8 @@ fn cmd_ci() -> Result<(), String> {
             }),
         ),
         ("parity", Box::new(|| parity::run(&root(), false))),
+        ("ver corpus", Box::new(|| ver::run(&root(), &["corpus"]))),
+        ("ver refsets", Box::new(|| ver::run(&root(), &["refsets"]))),
         ("layers", Box::new(cmd_layers)),
         ("assets", Box::new(|| assets::run(&root()))),
         ("wasm", Box::new(cmd_wasm)),

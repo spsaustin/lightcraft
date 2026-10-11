@@ -289,7 +289,7 @@ impl Limit {
 /// ([`pool_threads_for`]), made when first needed, whose idle threads cost nothing. rayon's global pool serves the
 /// interactive work (the loupe, exports) and has no priorities, so scan work queued there would make a slider drag wait
 /// behind it; here a light scan can use only two threads however large the machine is.
-fn scan_pool(pace: Pace) -> Option<&'static rayon::ThreadPool> {
+pub(crate) fn scan_pool(pace: Pace) -> Option<&'static rayon::ThreadPool> {
     static LIGHT: std::sync::OnceLock<Option<rayon::ThreadPool>> = std::sync::OnceLock::new();
     static NORMAL: std::sync::OnceLock<Option<rayon::ThreadPool>> = std::sync::OnceLock::new();
     static FULL: std::sync::OnceLock<Option<rayon::ThreadPool>> = std::sync::OnceLock::new();

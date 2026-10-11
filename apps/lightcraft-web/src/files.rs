@@ -1,4 +1,4 @@
-//! The library's small files (catalog journal, presets, view state, prefs) on the web.
+//! The library's small files (catalog journal, presets, view state, prefs, VERA's sidecars) on the web.
 //!
 //! Browser storage is asynchronous on the main thread (OPFS writable streams, IndexedDB), but the
 //! catalog [`Store`] is synchronous. So the files are mirrored in memory: they are read once at
@@ -82,6 +82,11 @@ impl Files {
 
     pub fn get(&self, name: &str) -> Option<Vec<u8>> {
         self.lock().files.get(name).cloned()
+    }
+
+    /// Names of the files held (stored or written since).
+    pub fn names(&self) -> Vec<String> {
+        self.lock().files.keys().cloned().collect()
     }
 
     /// Replace a file.
@@ -195,8 +200,23 @@ impl Store for FilesStore {
     }
 }
 
-/// Names of the library files read at start-up.
+/// Names of the library files read at start-up (besides VERA's, see [`is_vera_file`]).
 pub const LIBRARY_FILES: [&str; 6] = ["catalog.snap", "catalog.log", "presets.json", "view.json", "prefs.json", "ui.json"];
+
+/// One of VERA's sidecar files, which the engine keeps in the library's store when the library is not a folder
+/// (`vera-digests.bin`, `vera-ignored.json`, `vera-proposals.json`, `vera-embeddings-<model>.bin`,
+/// `vera-keywords-<model>-<vocabulary>.bin`): read at start-up with the others, and part of a backup.
+pub fn is_vera_file(name: &str) -> bool {
+    name.len() <= 160
+        && name.starts_with("vera-")
+        && (name.ends_with(".bin") || name.ends_with(".json"))
+        && name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'.' || b == b'_')
+}
+
+/// A file that belongs to the library folder (restored from a backup, read at start-up).
+pub fn is_library_file(name: &str) -> bool {
+    LIBRARY_FILES.contains(&name) || is_vera_file(name)
+}
 
 #[cfg(test)]
 mod tests {
@@ -207,7 +227,11 @@ mod tests {
 
     /// Apply flush ops to a "disk" map, as the backend would.
     fn flush(files: &Files, disk: &mut BTreeMap<String, Vec<u8>>) {
-        for op in files.take_dirty() {
+        apply(files.take_dirty(), disk);
+    }
+
+    fn apply(ops: Vec<FlushOp>, disk: &mut BTreeMap<String, Vec<u8>>) {
+        for op in ops {
             match op {
                 FlushOp::Write { name, data } => {
                     disk.insert(name, data);
@@ -239,6 +263,55 @@ mod tests {
         );
         f.failed(&ops);
         assert_eq!(f.take_dirty().len(), 2);
+    }
+
+    #[test]
+    fn vera_files_are_library_files() {
+        for n in ["vera-digests.bin", "vera-ignored.json", "vera-proposals.json", "vera-embeddings-siglip2-base-patch32-256.bin"] {
+            assert!(is_library_file(n) && is_vera_file(n), "{n}");
+        }
+        assert!(is_library_file("vera-keywords-siglip2-base-patch32-256-00ff00ff00ff00ff.bin"));
+        for n in ["vera-digests.part", "../vera-x.bin", "vera-a/b.bin", "VERA-X.bin", "other.bin", "vera-digests.bin.tmp"] {
+            assert!(!is_library_file(n), "{n}");
+        }
+        assert!(is_library_file("prefs.json"));
+    }
+
+    /// VERA's fingerprints are kept in the library's files on the web: a reload finds them and does not fingerprint
+    /// again; new ones are flushed as appends.
+    #[test]
+    fn vera_digests_survive_reload_through_flushes() {
+        let mut disk = BTreeMap::new();
+        let open = |disk: &BTreeMap<String, Vec<u8>>| {
+            let files = Files::default();
+            for (k, v) in disk {
+                files.preload(k, v.clone());
+            }
+            let mut s = Session::new();
+            let stores = LibraryStores { dir: "browser".into(), catalog: Box::new(files.store()), files: Box::new(files.store()), on_disk: false };
+            s.open_library_in(stores, true).unwrap();
+            (s, files)
+        };
+        let (mut s, files) = open(&disk);
+        let ids: Vec<u64> = s.catalog.photos().map(|p| p.id.0).take(3).collect();
+        s.execute("vera.digest", &json!({"ids": [ids[0], ids[1]]})).unwrap();
+        let ops = files.take_dirty();
+        assert!(ops.iter().any(|o| matches!(o, FlushOp::Write { name, .. } if name == "vera-digests.bin")), "{ops:?}");
+        apply(ops, &mut disk);
+        s.execute("vera.digest", &json!({"ids": [ids[2]]})).unwrap();
+        let ops = files.take_dirty();
+        assert!(
+            ops.iter().any(
+                |o| matches!(o, FlushOp::Append { name, offset, .. } if name == "vera-digests.bin" && *offset == disk["vera-digests.bin"].len())
+            ),
+            "the new digest is an append: {ops:?}"
+        );
+        apply(ops, &mut disk);
+        drop(s);
+        let (mut s2, _) = open(&disk);
+        let st = s2.execute("vera.status", &json!({})).unwrap();
+        assert_eq!(st["digested"].as_u64(), Some(3), "{st}");
+        assert!(st["sidecars"][0]["store"].as_str().is_some_and(|w| w.contains("browser storage")), "{st}");
     }
 
     #[test]

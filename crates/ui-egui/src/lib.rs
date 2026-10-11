@@ -89,6 +89,14 @@ mod tests_titlebar;
 #[cfg(test)]
 mod tests_unsaved;
 #[cfg(test)]
+mod tests_ver;
+#[cfg(test)]
+mod tests_vera;
+#[cfg(test)]
+mod tests_vera_describe;
+#[cfg(test)]
+mod tests_vera_lane;
+#[cfg(test)]
 mod tests_zoom;
 #[cfg(test)]
 mod tests_zoom_keys;
@@ -418,6 +426,10 @@ impl LightcraftApp {
             return r;
         }
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
+        if r.is_ok() && matches!(id, "library.filter" | "library.clearFilter" | "library.source") {
+            // a ranked search's or a duplicates list's results went: back to the sort from before
+            panels::vera::sync(self);
+        }
         if r.is_ok() && id == "mask.adjust" {
             // Judge local adjustments on the photo, without the selection overlay obscuring them.
             // Keep it hidden after release; O / the overlay eye can show it again.
@@ -827,6 +839,8 @@ impl LightcraftApp {
         self.save_status(ctx);
         self.slideshow_tick(ctx);
         panels::faces::pump(self, ctx);
+        // fingerprints for duplicates and the import check, at the face scan's pace
+        panels::vera::pump(self, ctx);
         // back from an external editor: pick up the files it saved
         let focused = ctx.input(|i| i.focused);
         if focused && !self.ui.was_focused && !self.ui.external_edits.is_empty() {
@@ -1228,6 +1242,26 @@ pub struct Caches {
     pub unnamed: Option<(u64, u64, f64, std::sync::Arc<panels::unnamed::Unnamed>)>,
     /// The most photos the face scan has had left at once since it last finished (the progress bar's whole).
     pub faces_peak: u64,
+    /// Background fingerprinting (`vera.pump`, see `panels::vera::pump`): the pace it was last given, how many
+    /// photos it has fingerprinted and how many are left, and when to ask it again.
+    pub vera_pace: &'static str,
+    pub vera_digested: u64,
+    pub vera_pending: u64,
+    pub vera_next_pump: f64,
+    /// The vector lane's background embedding, as the pump last reported it: (pending, embedded).
+    pub vera_embedding: (u64, u64),
+    /// The search-by-meaning model download the user started (`panels::vera_settings`): followed until it ends, and
+    /// when to look at it again (at most once a second).
+    pub vera_dl_watch: bool,
+    pub vera_dl_next: f64,
+    /// Bumped by an action in Settings ▸ Search, so its next frame reads the engine afresh.
+    pub vera_epoch: u64,
+    /// The last `search.text` warning shown as a toast (each is shown once).
+    pub vera_warning: Option<String>,
+    /// The Describe lane as the pump last reported it: (waiting, in flight, proposals to review).
+    pub vera_describe: (u64, u64, u64),
+    /// VER Records: Show VER Record's request and what it shows, a Write VER Records in flight (`panels::ver`).
+    pub ver: panels::ver::State,
     person_names: Option<(u64, std::sync::Arc<Vec<String>>)>,
     /// The grid's date runs, layout and indexes (by the visible list's generation).
     pub grid: panels::grid::GridCache,

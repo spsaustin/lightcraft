@@ -304,8 +304,13 @@ pub fn handle(app: &mut LightcraftApp, ctx: &egui::Context) {
     if !matches!(app.ui.dialog, Some(crate::state::Dialog::Shortcuts)) {
         app.recording_shortcut = None;
     }
-    // don't steal keys from text fields or from the keymap editor recording a shortcut
-    if ctx.egui_wants_keyboard_input() || app.recording_shortcut.is_some() || app.ui.name_edit.is_some() {
+    // don't steal keys from text fields or from the keymap editor recording a shortcut; the description review
+    // takes Return, ⌫ and → itself (Delete must never reach the photo behind it)
+    if ctx.egui_wants_keyboard_input()
+        || app.recording_shortcut.is_some()
+        || app.ui.name_edit.is_some()
+        || matches!(app.ui.dialog, Some(crate::state::Dialog::ReviewDescriptions { .. }))
+    {
         return;
     }
     let mut fire: Vec<String> = Vec::new();

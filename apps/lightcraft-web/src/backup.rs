@@ -4,7 +4,8 @@
 //!
 //! Layout of a backup:
 //! - `library/catalog.snap`, `library/catalog.log`, `library/presets.json`, … (see
-//!   [`crate::files::LIBRARY_FILES`]);
+//!   [`crate::files::LIBRARY_FILES`]) and VERA's files (`library/vera-digests.bin`, `vera-ignored.json`, …,
+//!   [`crate::files::is_vera_file`]);
 //! - `originals/<content hash>/<file name>`: each imported photo's original bytes, under its own
 //!   name so an unzipped backup is browsable;
 //! - `README.txt`.
@@ -63,7 +64,7 @@ pub fn original_entry(hash: &str, file_name: &str) -> String {
 /// `None` to skip it (README, thumbnails, anything unknown or unsafe).
 pub fn restore_key(entry: &str, dir: &str) -> Option<String> {
     if let Some(name) = entry.strip_prefix("library/") {
-        return crate::files::LIBRARY_FILES.contains(&name).then(|| format!("{dir}/{name}"));
+        return crate::files::is_library_file(name).then(|| format!("{dir}/{name}"));
     }
     let rest = entry.strip_prefix("originals/")?;
     let (hash, _) = rest.split_once('/').unwrap_or((rest, ""));
@@ -320,6 +321,8 @@ mod tests {
         assert_eq!(restore_key("library/catalog.snap", "library-restored-1").as_deref(), Some("library-restored-1/catalog.snap"));
         assert_eq!(restore_key("library/../../x", "library-r"), None);
         assert_eq!(restore_key("library/evil.bin", "library-r"), None);
+        assert_eq!(restore_key("library/vera-ignored.json", "library-r").as_deref(), Some("library-r/vera-ignored.json"));
+        assert_eq!(restore_key("library/vera-../x.bin", "library-r"), None);
         assert_eq!(restore_key("originals/abc123/IMG.jpg", "d").as_deref(), Some("originals/abc123"));
         assert_eq!(restore_key("originals/../library/catalog.log", "d"), None);
         assert_eq!(restore_key("README.txt", "d"), None);

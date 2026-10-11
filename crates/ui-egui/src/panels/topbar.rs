@@ -101,16 +101,25 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                 paint(child.painter(), Rect::from_min_size(pos2(x0, sr.center().y - 8.0), vec2(16.0, 16.0)), Icon::Search, t.text_dim);
                 child.painter().galley(pos2(x0 + 24.0, sr.center().y - g.size().y / 2.0), g, t.text_dim);
             }
-            let resp = crate::text_field::TextField::singleline("field:search", &mut app.ui.search)
+            let edit = crate::text_field::TextField::singleline("field:search", &mut app.ui.search)
                 .frame(false)
                 .width(sr.width() - 20.0)
                 .font(t.font(13.5))
                 .text_color(t.text)
-                .show(&mut child)
-                .response;
-            if resp.changed() {
+                .show(&mut child);
+            if edit.response.changed() {
                 let q = app.ui.search.clone();
+                // typing filters live again: ranked results from an earlier Enter go
+                if matches!(app.ui.only_origin, Some(crate::state::OnlyOrigin { kind: crate::state::OnlyKind::Ranked { .. }, .. })) {
+                    crate::panels::vera::clear_only(app);
+                    app.ui.search = q.clone();
+                }
                 let _ = app.run("library.filter", json!({"text": q}));
+            }
+            // Return: the photos ranked by these words, best first (`search.text`)
+            if edit.ending == Some(crate::text_field::Ending::Return) {
+                let q = app.ui.search.clone();
+                crate::panels::vera::ranked_search(app, ui.ctx(), &q);
             }
             // filter icon right of the search field
             let fr = Rect::from_center_size(pos2(sr.right() + 22.0, sr.center().y), vec2(28.0, 28.0));

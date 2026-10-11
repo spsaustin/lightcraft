@@ -153,6 +153,27 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("dialog.contactSheet", "Contact Sheet PDF…", None, "File"),
     ("app.contactSheet", "Export Contact Sheet PDF", None, ""),
     ("photo.editInExternal", "Edit in External Editor", Some("Cmd+Shift+E"), "Photo"),
+    // {id?}: the photo (the active one) and the photos that are the same picture, by fingerprint (`photo.duplicates`)
+    ("photo.showDuplicates", "Show Duplicates", None, "Photo"),
+    // {id?}: the photo (the active one) and the pictures that look like it, by the vector lane (`photo.similar`)
+    ("photo.showLookAlikes", "Find Photos That Look Alike", None, "Photo"),
+    // the selection (or the active photo) to Describe (`photo.describe`): proposals wait in Review Descriptions
+    ("photo.describeSelected", "Describe Photos…", None, "Photo"),
+    // keywords alone, from the search model on this computer (`photo.describe {keywordsOnly: true}`)
+    ("photo.keywordsSelected", "Suggest Keywords", None, "Photo"),
+    // Describe's proposals, one at a time: Accept, Reject or Skip each (`describe.list`, `describe.accept`)
+    ("view.reviewDescriptions", "Review Descriptions", None, "Window"),
+    // {id?}: the photo's VER Record (or why it has none), made off the UI thread (`panels::ver`, `ver.export`)
+    ("photo.showVerRecord", "Show VER Record…", None, "Photo"),
+    // {dir, ids?}: the selection's VER Records into a folder, in the background (`ver.export {background}`)
+    ("library.writeVerRecords", "Write VER Records…", None, "File"),
+    // {path}: validate a VER Record file and match it against the library (`ver.import`)
+    ("file.readVerRecord", "Read VER Record…", None, "File"),
+    // the Record dialog's Save… ({path}), Settings ▸ Search ▸ VER Records ▸ Signing key ▸ Choose… ({path}), and the
+    // photos the last Write VER Records skipped
+    ("dialog.verRecordSave", "Save VER Record…", None, ""),
+    ("dialog.verSigningKey", "Choose VER Signing Key…", None, ""),
+    ("dialog.verSkipped", "Skipped VER Records", None, ""),
     ("dialog.mergeHdr", "HDR…", Some("Ctrl+H"), "Photo>Photo Merge"),
     ("dialog.mergePanorama", "Panorama…", Some("Ctrl+M"), "Photo>Photo Merge"),
     ("dialog.mergeHdrPanorama", "HDR Panorama…", None, "Photo>Photo Merge"),
@@ -960,6 +981,95 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             app.ui.dialog = Some(Dialog::PasteSettings { groups });
             Ok(Value::Null)
         }
+        "photo.showDuplicates" => {
+            let id = p.get("id").and_then(Value::as_u64).map(lightcraft_catalog::PhotoId);
+            crate::panels::vera::show_duplicates(app, &ctx, id)
+        }
+        "photo.showLookAlikes" => {
+            let id = p.get("id").and_then(Value::as_u64).map(lightcraft_catalog::PhotoId);
+            crate::panels::vera::show_look_alikes(app, &ctx, id)
+        }
+        "photo.showVerRecord" => {
+            let id = p.get("id").and_then(Value::as_u64).map(lightcraft_catalog::PhotoId);
+            crate::panels::ver::show_record(app, &ctx, id)
+        }
+        "dialog.verSkipped" => {
+            app.ui.dialog = Some(Dialog::VerSkipped { rows: app.caches.ver.skipped.clone() });
+            Ok(Value::Null)
+        }
+        "library.writeVerRecords" => {
+            let dir = match p.get("dir").and_then(Value::as_str) {
+                Some(d) => d.to_string(),
+                None => {
+                    let req = PickRequest::folder(crate::i18n::tr("Write VER Records"));
+                    match crate::pick::ask(app, id, p, "dir", req, |s| s.pick_folder.as_mut().and_then(|f| f()).map(|x| vec![x])) {
+                        Picked::Now(v) => match v.into_iter().next() {
+                            Some(x) => x,
+                            None => return Some(Ok(Value::Null)),
+                        },
+                        Picked::Later => return Some(Ok(Value::Null)),
+                        Picked::Unavailable => return Some(Err("no folder dialog on this platform".into())),
+                    }
+                }
+            };
+            let ids = p.get("ids").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).collect());
+            crate::panels::ver::write_records(app, &ctx, &dir, ids)
+        }
+        "file.readVerRecord" => {
+            let path = match p.get("path").and_then(Value::as_str) {
+                Some(x) => x.to_string(),
+                None => {
+                    let req = PickRequest::file(crate::i18n::tr("Read VER Record"), crate::i18n::tr("VER Records"), &["json"]);
+                    match crate::pick::ask(app, id, p, "path", req, |s| s.pick_files.as_mut().map(|f| f())) {
+                        Picked::Now(v) => match v.into_iter().next() {
+                            Some(x) => x,
+                            None => return Some(Ok(Value::Null)),
+                        },
+                        Picked::Later => return Some(Ok(Value::Null)),
+                        Picked::Unavailable => return Some(Err("no file dialog on this platform".into())),
+                    }
+                }
+            };
+            crate::panels::ver::read_record(app, &path)
+        }
+        "dialog.verRecordSave" => {
+            let path = match p.get("path").and_then(Value::as_str) {
+                Some(x) => x.to_string(),
+                None => {
+                    let name = crate::panels::ver::suggested_name(app);
+                    let req = PickRequest::save(crate::i18n::tr("Save VER Record"), crate::i18n::tr("VER Records"), &["json"], name);
+                    match crate::pick::ask(app, id, p, "path", req, |_| None) {
+                        Picked::Now(v) => match v.into_iter().next() {
+                            Some(x) => x,
+                            None => return Some(Ok(Value::Null)),
+                        },
+                        Picked::Later => return Some(Ok(Value::Null)),
+                        Picked::Unavailable => return Some(Err("no save dialog on this platform".into())),
+                    }
+                }
+            };
+            crate::panels::ver::save_record(app, &ctx, &path)
+        }
+        "dialog.verSigningKey" => {
+            let path = match p.get("path").and_then(Value::as_str) {
+                Some(x) => x.to_string(),
+                None => {
+                    let req = PickRequest::file(crate::i18n::tr("Choose a Signing Key"), crate::i18n::tr("Ed25519 keys (PEM)"), &["pem", "key"]);
+                    match crate::pick::ask(app, id, p, "path", req, |s| s.pick_files.as_mut().map(|f| f())) {
+                        Picked::Now(v) => match v.into_iter().next() {
+                            Some(x) => x,
+                            None => return Some(Ok(Value::Null)),
+                        },
+                        Picked::Later => return Some(Ok(Value::Null)),
+                        Picked::Unavailable => return Some(Err("no file dialog on this platform".into())),
+                    }
+                }
+            };
+            crate::panels::ver::set_signing_key(app, &ctx, &path)
+        }
+        "photo.describeSelected" => crate::panels::describe_review::describe_selected(app, &ctx, false),
+        "photo.keywordsSelected" => crate::panels::describe_review::describe_selected(app, &ctx, true),
+        "view.reviewDescriptions" => crate::panels::describe_review::open(app, &ctx),
         "view.focusSearch" => {
             // the search field lives in the top bar of the library and detail views alike
             app.ui.focus_search = true;
@@ -1000,7 +1110,15 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             // no previous export: 2048 px long edge; a previous full-size export: full size
             let full_size = opts.resize.is_none() && lightcraft_engine::export::ExportOptions::has_size_param(&prev);
             let resize = opts.resize.unwrap_or_default();
-            app.ui.dialog = Some(Dialog::Export { opts, full_size, resize, preset_name: String::new(), limit_kb: u("limitKb", 0) as u32, dir });
+            app.ui.dialog = Some(Dialog::Export {
+                opts,
+                full_size,
+                resize,
+                preset_name: String::new(),
+                limit_kb: u("limitKb", 0) as u32,
+                dir,
+                ver_records: None,
+            });
             Ok(Value::Null)
         }
         "merge.hdrLast" => crate::merge::start_last(app, "merge.hdr"),
@@ -1592,9 +1710,18 @@ pub fn ui_enabled(app: &LightcraftApp, id: &str) -> bool {
     match id {
         "dialog.contactSheet" | "app.contactSheet" => !cfg!(target_arch = "wasm32") && app.session.active().is_some() && app.export.is_none(),
         s if s.starts_with("panel.") || s.starts_with("tool.") || s.starts_with("section.") => app.session.active().is_some() || s == "panel.close",
-        "app.export" | "dialog.export" | "dialog.createPreset" | "dialog.rename" | "dialog.captureTime" | "dialog.copySettings" => {
-            app.session.active().is_some()
-        }
+        "app.export"
+        | "dialog.export"
+        | "dialog.createPreset"
+        | "dialog.rename"
+        | "dialog.captureTime"
+        | "dialog.copySettings"
+        | "photo.showDuplicates"
+        | "photo.showLookAlikes"
+        | "photo.showVerRecord" => app.session.active().is_some(),
+        "library.writeVerRecords" => !cfg!(target_arch = "wasm32") && !app.session.catalog.is_empty() && app.caches.ver.batch.is_none(),
+        "dialog.verRecordSave" => app.caches.ver.view.as_ref().is_some_and(|v| v.result.is_some()),
+        "photo.describeSelected" | "photo.keywordsSelected" => app.session.active().is_some() || !app.session.selection.ids.is_empty(),
         "photo.tagFromTracklog" => app.session.active().is_some() && app.services.pick_tracklog.is_some(),
         "app.exportPrevious" => app.session.active().is_some() && app.session.last_export.is_some(),
         "dialog.pasteSettings" => app.session.active().is_some() && app.session.clipboard.is_some(),

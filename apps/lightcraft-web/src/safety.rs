@@ -169,6 +169,12 @@ pub async fn backup(files: Files, backend: Backend, names: HashMap<String, Strin
             add(&mut zip, &format!("library/{name}"), &d)?;
         }
     }
+    // VERA's fingerprints and the pairs and proposals the user decided on
+    for name in files.names().into_iter().filter(|n| crate::files::is_vera_file(n)) {
+        if let Some(d) = files.get(&name) {
+            add(&mut zip, &format!("library/{name}"), &d)?;
+        }
+    }
     let mut originals = 0;
     for hash in backend.list("originals").await? {
         if !valid_hash(&hash) {

@@ -1,0 +1,216 @@
+{
+  "ver_version": "1.1",
+  "cpnp_version": "1.0",
+  "record_id": "9c1e5b7a-4f28-5d06-b1c3-8e7a2d90f514",
+  "created_at": "2026-08-25T10:00:00Z",
+  "generator": {
+    "name": "ver-conformance-corpus",
+    "version": "1.1-draft"
+  },
+  "conformance_level": "L0",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "5802b8d7a09d79ca1f0a6f7e340fb8b6bf297cbd4147a58de4320f6a6b15d2f2"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "03733be00d4e69a60ff3d7e0252021037bc9c4289b9bfbc2ec92f3fbf417eb80",
+      "width": 8,
+      "height": 6
+    }
+  },
+  "image": {
+    "format": "png",
+    "width": 8,
+    "height": 6,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "kind": "visual",
+      "model": {
+        "family": "corpus-vision",
+        "architecture": "ViT-Tiny/4",
+        "checkpoint": "corpus-visual-v1",
+        "weights_sha256": "0dfcf4dea153bcdd0b54278d172169c714913c5e71a5896f923359a247f02afb"
+      },
+      "dim": 4,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_4",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_4",
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "channel_order": "rgb"
+      },
+      "reference": {
+        "set_uri": "https://refsets.example.org/corpus-visual-1.1",
+        "set_manifest_sha256": "58d6aed1be8e7c8eb56139e007ea3ded1c6f5a675ba50ea86ec75ed5f5835bbe",
+        "tolerance_cosine": 0.999
+      }
+    },
+    {
+      "space_id": "org.verstandard.space.siglip2-base-p16-256-joint/1.1.0",
+      "kind": "joint_visual_text",
+      "model": {
+        "family": "siglip2",
+        "architecture": "ViT-B/16",
+        "checkpoint": "siglip2-base-patch16-256",
+        "checkpoint_uri": "https://models.example.org/siglip2-base-patch16-256",
+        "revision": "3f0b1c9a7d2e4f6a8b0c1d2e3f4a5b6c7d8e9f01",
+        "weights_sha256": "107ab7f3b0ca8855b0ad54a29477272fa0f818fb028508a74c8c982cda86dc0a",
+        "bundle": {
+          "bundle_digest_alg": "ver-bundle-manifest/1",
+          "manifest_sha256": "8da0801ce170526e55b691a1ffb95a1179639a6f7fa9bdfdf8effab3740d481e",
+          "files": [
+            {
+              "path": "config.json",
+              "byte_length": 59,
+              "sha256": "f2dcfc72ca4f99960ebdce0e924cd880444e6cc2cf891f8ed22470598297cebf"
+            },
+            {
+              "path": "model.safetensors",
+              "byte_length": 60,
+              "sha256": "107ab7f3b0ca8855b0ad54a29477272fa0f818fb028508a74c8c982cda86dc0a"
+            },
+            {
+              "path": "tokenizer.json",
+              "byte_length": 56,
+              "sha256": "efc5fd1068ade7a87cc835ac042ed67239016ef722be043eb836a643af0777cc"
+            }
+          ]
+        }
+      },
+      "dim": 768,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_256",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_256",
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "channel_order": "rgb",
+        "tokenizer": "siglip2-gemma-sentencepiece",
+        "tokenizer_sha256": "efc5fd1068ade7a87cc835ac042ed67239016ef722be043eb836a643af0777cc",
+        "max_length": 64,
+        "truncation": "tail",
+        "casing": "lower"
+      },
+      "reference": {
+        "set_uri": "https://verstandard.org/refsets/siglip2-base-p16-256-joint-1.1.0",
+        "set_manifest_sha256": "44525ee8c830ce1c324cea53008da7d28d1d7e8f506836d6e5cfffa128bfb60f",
+        "tolerance_cosine": 0.999,
+        "tolerance_cosine_p5": 0.997,
+        "tolerance_cosine_worst": 0.995
+      },
+      "descriptor_uri": "https://verstandard.org/spaces/siglip2-base-p16-256-joint-1.1.0.json",
+      "provenance": {
+        "publisher": "verstandard.org",
+        "published_at": "2026-08-01T00:00:00Z",
+        "license": "Apache-2.0"
+      },
+      "descriptor_sha256": "dca19de0a37c609c9b180c7187082a6cd0f6696e2bd75d759f9f3c653d8a74bc"
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "dim": 4,
+      "dtype": "fp32",
+      "vector": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "produced_at": "2026-08-25T09:00:03Z",
+      "producer": "ver-conformance-corpus/1.1-draft"
+    },
+    {
+      "role": "contextual",
+      "space_id": "org.verstandard.space.siglip2-base-p16-256-joint/1.1.0",
+      "dim": 768,
+      "dtype": "fp32",
+      "source": {
+        "class": "caption_human",
+        "text_sha256": "904354effe95608efc30225065c2bacc20de19bd0148605b98560f0b6e0a3d3b",
+        "lang": "en",
+        "provenance": "dc:description as acquired, before the producer redacted it"
+      },
+      "vector_ref": {
+        "uri": "https://vectors.example.org/9c1e5b7a/ctx-caption.f32le",
+        "sha256": "da65119b8e1e1a6e870d4cb930d5fc485b71bedd139c15a804fe3a023664b25d",
+        "byte_length": 3072
+      },
+      "produced_at": "2026-08-23T09:14:06Z",
+      "producer": "ver-studio/1.1.0-draft.2",
+      "compute": {
+        "runtime": "onnxruntime",
+        "runtime_version": "1.22.0",
+        "precision": "fp32",
+        "device_class": "gpu"
+      }
+    }
+  ],
+  "provenance": {
+    "chain": [
+      {
+        "at": "2026-08-25T09:00:00Z",
+        "actor": "ver-conformance-corpus",
+        "action": "import",
+        "tool": "ver-fetch/1.1-draft"
+      }
+    ]
+  },
+  "metadata": {
+    "availability": {
+      "xmp": "redacted"
+    },
+    "normalized": {
+      "dc:description": {
+        "redacted": true,
+        "reason": "private-caption",
+        "commitment_sha256": "5b7238f9447016c703598d58c87bb96370dd6af6e2a4221a787b872f344f5dda",
+        "commitment_alg": "ver-redaction-commitment/1"
+      }
+    },
+    "redactions": [
+      {
+        "field": "dc:description",
+        "reason": "private-caption",
+        "state": "producer_performed",
+        "commitment_sha256": "5b7238f9447016c703598d58c87bb96370dd6af6e2a4221a787b872f344f5dda",
+        "commitment_alg": "ver-redaction-commitment/1",
+        "normalized_pointer": "/dc:description"
+      }
+    ]
+  }
+}

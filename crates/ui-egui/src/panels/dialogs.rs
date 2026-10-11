@@ -99,6 +99,11 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
         Dialog::DenoiseModel { .. } => "AI Denoise Model",
         Dialog::FaceModel { info, .. } if info["download"].is_string() => "Download Face Model",
         Dialog::FaceModel { .. } => "Add Face Model",
+        Dialog::VeraModel { .. } => "Download the SigLIP 2 Model",
+        Dialog::ReviewDescriptions { .. } => "Review Descriptions",
+        Dialog::VerRecord { .. } => "VER Record",
+        Dialog::VerImport { .. } => "Read VER Record",
+        Dialog::VerSkipped { .. } => "Skipped VER Records",
         Dialog::WhatsNew => "What's New",
         Dialog::Cull { .. } => "Assisted Culling",
         Dialog::SmartRules { id: None, .. } => "New Smart Album",
@@ -139,7 +144,10 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
             Dialog::Import { .. } => crate::import::DIALOG_SIZE[0],
             Dialog::SmartRules { .. } => 680.0,
             Dialog::AllMetadata { .. } => 620.0,
-            Dialog::FaceModel { .. } => 460.0,
+            Dialog::FaceModel { .. } | Dialog::VeraModel { .. } => 460.0,
+            Dialog::ReviewDescriptions { .. } => 760.0,
+            Dialog::VerRecord { .. } => 640.0,
+            Dialog::VerImport { .. } | Dialog::VerSkipped { .. } => 560.0,
             _ => 380.0,
         })
         .show(ctx, |ui| {
@@ -193,6 +201,11 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 }
                 Dialog::DenoiseModel { info, accepted } => crate::panels::denoise::model_dialog(app, ui, &t, info, accepted),
                 Dialog::FaceModel { info, accepted, .. } => crate::panels::faces::model_dialog(app, ui, &t, info, accepted),
+                Dialog::VeraModel { info, accepted, error } => crate::panels::vera_settings::licence_dialog(app, ui, &t, info, accepted, error.as_deref()),
+                Dialog::ReviewDescriptions { review } => crate::panels::describe_review::body(app, ui, &t, review),
+                Dialog::VerRecord { photo } => crate::panels::ver::record_dialog(app, ui, &t, *photo),
+                Dialog::VerImport { file, result, error } => crate::panels::ver::import_dialog(app, ui, &t, file, result, error.as_deref()),
+                Dialog::VerSkipped { rows } => crate::panels::ver::skipped_dialog(ui, &t, rows),
                 Dialog::SystemInfo { rows } => {
                     egui::Grid::new("sysinfo").num_columns(2).spacing([16.0, 4.0]).striped(true).show(ui, |ui| {
                         for (k, v) in rows.iter() {
@@ -495,7 +508,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     ui.label("150 dpi · sRGB · current edits · fit without cropping");
                     ui.label("Choose a PDF destination after confirming. Print the PDF from your viewer.");
                 }
-                Dialog::Export { opts, full_size, resize, preset_name, limit_kb, dir } => {
+                Dialog::Export { opts, full_size, resize, preset_name, limit_kb, dir, ver_records } => {
                     use lightcraft_engine::export::{Anchor as P, ExportFormat as F, MetadataPolicy as M, SharpenAmount as A, SharpenFor as S};
                     let n = app.session.selection.ids.len().max(1);
                     ui.label(egui::RichText::new(crate::i18n::tr_format!("{n} photo{}", if n == 1 { "" } else { "s" }, n = n)).color(t.text_dim));
@@ -731,6 +744,16 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                         &[(K::Unique, "Add number"), (K::Overwrite, "Overwrite"), (K::Skip, "Skip")],
                         &mut opts.conflict,
                     );
+                    // VER Records beside the files: as Settings ▸ Search ▸ VER Records says, unless changed here
+                    let mut ver = ver_records.unwrap_or_else(|| crate::panels::ver::sidecars_on(app));
+                    field(ui, "VER", |ui| {
+                        let r = ui.checkbox(&mut ver, crate::i18n::tr("Write VER Records"));
+                        crate::widgets::register(ui.ctx(), "check:exportVerRecords", r.rect);
+                        r.on_hover_text(crate::i18n::tr(
+                            "A Record beside each file (.ver.json, and .ver-1.0.json for VER 1.0 readers): what the picture is, what metadata it carries and where it came from.",
+                        ));
+                    });
+                    *ver_records = Some(ver);
                     ui.add_space(4.0);
                     field(ui, "Save preset", |ui| {
                         trailing_button_row(ui, |ui| {
@@ -950,7 +973,18 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 // a model file LightCraft cannot use has nothing to confirm
                 let unusable_model = matches!(&dlg, Dialog::DenoiseModel { info, .. } | Dialog::FaceModel { info, .. } if info["kind"] == "unsupported");
-                let informational = unusable_model || matches!(dlg, Dialog::About | Dialog::Shortcuts | Dialog::Settings { .. });
+                let informational =
+                    unusable_model
+                        || matches!(
+                            dlg,
+                            Dialog::About
+                                | Dialog::Shortcuts
+                                | Dialog::Settings { .. }
+                                | Dialog::ReviewDescriptions { .. }
+                                | Dialog::VerRecord { .. }
+                                | Dialog::VerImport { .. }
+                                | Dialog::VerSkipped { .. }
+                        );
                 let sam = &app.session.segmenter;
                 let (sam_installed, sam_running, sam_failed) = (sam.installed(), sam.download_status().running, sam.download_status().error.is_some());
                 // no download location in this build: nothing to offer but the manual install
@@ -981,6 +1015,8 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     Dialog::DenoiseModel { .. } => "Install",
                     Dialog::FaceModel { info, .. } if !informational && info["download"].is_string() => "Download",
                     Dialog::FaceModel { .. } if !informational => "Install",
+                    Dialog::VeraModel { error: Some(_), .. } => "Try Again",
+                    Dialog::VeraModel { .. } => "Download",
                     Dialog::ConfirmDelete { .. } | Dialog::DeleteKeyword { .. } => "Delete",
                     // (not "Merge": that is photo merging, HDR / panorama, in some languages)
                     Dialog::MoveKeyword { .. } => "Merge Keywords",
@@ -1001,7 +1037,10 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 let can_confirm = informational
                     || !matches!(
                         &dlg,
-                        Dialog::DenoiseModel { accepted: false, .. } | Dialog::FaceModel { accepted: false, .. } | Dialog::SynchronizeFolder { counts: None, .. }
+                        Dialog::DenoiseModel { accepted: false, .. }
+                            | Dialog::FaceModel { accepted: false, .. }
+                            | Dialog::VeraModel { accepted: false, .. }
+                            | Dialog::SynchronizeFolder { counts: None, .. }
                     )
                         // smart-album rules that can't mean anything wait to be fixed
                         && !matches!(&dlg, Dialog::SmartRules { id, rules, .. } if !rules.check_for(&app.session.catalog, id.map(lightcraft_catalog::AlbumId)).is_empty());
@@ -1051,8 +1090,8 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 app.toast(ctx, e)
             }
             // the SAM 3 dialog stays open to show the download (or why it can't start)
-            Err(e) if matches!(dlg, Dialog::SamModel { .. }) => {
-                if let Dialog::SamModel { error, .. } = &mut dlg {
+            Err(e) if matches!(dlg, Dialog::SamModel { .. } | Dialog::VeraModel { .. }) => {
+                if let Dialog::SamModel { error, .. } | Dialog::VeraModel { error, .. } = &mut dlg {
                     *error = Some(e);
                 }
             }
@@ -1327,6 +1366,7 @@ pub fn confirm_dialog(app: &mut LightcraftApp, dlg: &Dialog) -> Result<serde_jso
         Dialog::AutoStack { gap } => app.run("stack.auto", json!({"gap": gap})),
         Dialog::DenoiseModel { info, accepted } => crate::panels::denoise::install(app, info, *accepted),
         Dialog::FaceModel { path, info, accepted } => crate::panels::faces::install(app, path, info, *accepted),
+        Dialog::VeraModel { accepted, .. } => crate::panels::vera_settings::download(app, *accepted),
         Dialog::AllMetadata { .. } | Dialog::SystemInfo { .. } | Dialog::WhatsNew => Ok(serde_json::Value::Null),
         Dialog::Cull { reject_below, pick_best } => {
             let mut p = json!({"pickBest": pick_best});
@@ -1361,10 +1401,14 @@ pub fn confirm_dialog(app: &mut LightcraftApp, dlg: &Dialog) -> Result<serde_jso
         Dialog::ContactSheet { options } => app.run("app.contactSheet", json!(options)),
         Dialog::CopySettings { groups } => app.run("develop.copy", json!({"groups": groups})),
         Dialog::PasteSettings { groups } => app.run("develop.paste", json!({"groups": groups})),
-        Dialog::Export { opts, full_size, resize, limit_kb, dir, .. } => {
+        Dialog::Export { opts, full_size, resize, limit_kb, dir, ver_records, .. } => {
             let mut p = export_dialog_params(opts, *full_size, resize, *limit_kb);
             p["dir"] = json!(dir);
             p["background"] = json!(true);
+            // the dialog's "Write VER Records", for this export (`control::export_active` applies it to the run)
+            if let Some(on) = ver_records {
+                p["verRecords"] = json!(on);
+            }
             app.run("app.export", p)
         }
         Dialog::Merge { opts } => crate::merge::start_final(app, opts),
@@ -1372,7 +1416,13 @@ pub fn confirm_dialog(app: &mut LightcraftApp, dlg: &Dialog) -> Result<serde_jso
         Dialog::ConfirmDelete { .. } => app.run("photo.delete", json!({})),
         Dialog::RemoveFolder { path, disk, .. } => app.run("library.removeFolder", json!({"path": path, "disk": disk})),
         d @ Dialog::SynchronizeFolder { .. } => crate::sync::confirm(app, d),
-        Dialog::About | Dialog::Shortcuts | Dialog::Settings { .. } => Ok(serde_json::Value::Null),
+        Dialog::About
+        | Dialog::Shortcuts
+        | Dialog::Settings { .. }
+        | Dialog::ReviewDescriptions { .. }
+        | Dialog::VerRecord { .. }
+        | Dialog::VerImport { .. }
+        | Dialog::VerSkipped { .. } => Ok(serde_json::Value::Null),
     }
 }
 

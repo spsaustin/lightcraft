@@ -74,6 +74,28 @@ pub(crate) fn display_label(chip: &FilterChip, filter: &lightcraft_catalog::Filt
     tr(&chip.label).to_string()
 }
 
+/// A chip's label as the app shows it: [`display_label`], except that the "only these photos" chip names the ranked
+/// search or the duplicates it shows ("Ranked: “dog”", "Duplicates of IMG_0042.JPG").
+pub(crate) fn label(app: &LightcraftApp, chip: &FilterChip) -> String {
+    chip.clear
+        .get("only")
+        .and_then(|_| super::vera::only_label(app))
+        .unwrap_or_else(|| display_label(chip, &app.session.filter, &app.session.catalog))
+}
+
+/// Clear one chip's filter (its × or its entry under "+N more").
+fn remove(app: &mut LightcraftApp, chip: &FilterChip) {
+    if chip.clear.get("only").is_some() {
+        // also gives back the sort from before a ranked search
+        super::vera::clear_only(app);
+        return;
+    }
+    let _ = app.run("library.filter", chip.clear.clone());
+    if chip.clear.get("text").is_some() {
+        app.ui.search.clear();
+    }
+}
+
 /// Draws the strip; does nothing without chips.
 pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, chips: &[FilterChip]) {
     if chips.is_empty() {
@@ -88,7 +110,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, chips: &[FilterChip]) {
     let mut x = bar.left() + 20.0;
     let mut shown = 0;
     for (i, c) in chips.iter().enumerate() {
-        let label = display_label(c, &app.session.filter, &app.session.catalog);
+        let label = label(app, c);
         let w = chip_width(ui, &label, font.clone());
         // always show the first chip; keep room for the tail unless this is the last one that fits
         let room = right - x - if i + 1 == chips.len() { 90.0 } else { TAIL };
@@ -108,10 +130,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, chips: &[FilterChip]) {
         ui.painter().line_segment([a, b], Stroke::new(1.3, col));
         ui.painter().line_segment([pos2(a.x, b.y), pos2(b.x, a.y)], Stroke::new(1.3, col));
         if resp.clicked() {
-            let _ = app.run("library.filter", c.clear.clone());
-            if c.clear.get("text").is_some() {
-                app.ui.search.clear();
-            }
+            remove(app, c);
         }
         x = r.right() + GAP;
         shown = i + 1;
@@ -127,15 +146,8 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, chips: &[FilterChip]) {
         let more = crate::widgets::text_button(&mut child, "chipsMore", &crate::i18n::tr_format!("+{} more", hidden.len()), false);
         egui::Popup::menu(&more).show(|ui| {
             for c in hidden {
-                if ui
-                    .button(format!("{}  ✕", display_label(c, &app.session.filter, &app.session.catalog)))
-                    .on_hover_text(crate::i18n::tr("Remove this filter"))
-                    .clicked()
-                {
-                    let _ = app.run("library.filter", c.clear.clone());
-                    if c.clear.get("text").is_some() {
-                        app.ui.search.clear();
-                    }
+                if ui.button(format!("{}  ✕", label(app, c))).on_hover_text(crate::i18n::tr("Remove this filter")).clicked() {
+                    remove(app, c);
                 }
             }
         });

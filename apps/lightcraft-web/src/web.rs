@@ -321,6 +321,15 @@ async fn boot(opts: Options) -> Boot {
                 Err(e) => log::error!("reading {name}: {e}"),
             }
         }
+        // VERA's sidecars (fingerprints, ignored pairs, proposals): rebuildable or small, so one that can't be read is
+        // only logged (the engine then fingerprints again)
+        for name in b.list(&lib_dir).await.unwrap_or_default().into_iter().filter(|n| crate::files::is_vera_file(n)) {
+            match b.read(&library_key(&lib_dir, &name)).await {
+                Ok(Some(data)) => files.preload(&name, data),
+                Ok(None) => {}
+                Err(e) => log::warn!("reading {name}: {e}"),
+            }
+        }
         if let Ok(Some(j)) = b.read(THUMB_INDEX).await {
             index = ThumbIndex::from_json(&j);
         }

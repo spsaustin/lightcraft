@@ -1,5 +1,6 @@
 //! Catalog records.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use lightcraft_develop::{DevelopSettings, WbMode};
@@ -199,7 +200,29 @@ pub struct Meta {
     /// Left out of the catalog JSON when empty (most photos), so older catalogs read unchanged.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub regions: Vec<lightcraft_meta::Region>,
+    /// Where a descriptive field's value came from, by field name (`title`, `caption`, `alt_text`,
+    /// `extended_description`, `keywords`): typed by the user, read from the file, or proposed by
+    /// Describe and accepted (`describe.accept`). A field not listed has no recorded origin. Left
+    /// out of the catalog JSON when empty, so older catalogs read unchanged.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub provenance: BTreeMap<String, Provenance>,
 }
+
+/// The origin of one descriptive field's value ([`Meta::provenance`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Provenance {
+    /// Typed or edited by the user.
+    User,
+    /// Read from the file's embedded metadata.
+    Exif,
+    /// Proposed by the Describe lane and accepted: the model that wrote it (or `local:` + the
+    /// keyword model for zero-shot keywords) and when it was accepted (ISO 8601).
+    Describe { model: String, at: String },
+}
+
+/// The field names [`Meta::provenance`] is keyed by.
+pub const PROVENANCE_FIELDS: [&str; 5] = ["title", "caption", "alt_text", "extended_description", "keywords"];
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Version {
@@ -487,6 +510,32 @@ impl Album {
 #[cfg(test)]
 mod edited_tests {
     use super::*;
+
+    #[test]
+    fn provenance_round_trips_and_old_catalogs_read_without_it() {
+        let mut m = Meta { title: "Dawn".into(), keywords: vec!["lake".into()], ..Default::default() };
+        let v = serde_json::to_value(&m).unwrap();
+        assert!(v.get("provenance").is_none(), "left out when empty: {v}");
+        m.provenance.insert("title".into(), Provenance::Describe { model: "llava".into(), at: "2026-10-11T10:00:00".into() });
+        m.provenance.insert("keywords".into(), Provenance::User);
+        m.provenance.insert("caption".into(), Provenance::Exif);
+        let v = serde_json::to_value(&m).unwrap();
+        assert_eq!(v["provenance"]["title"], serde_json::json!({"kind": "describe", "model": "llava", "at": "2026-10-11T10:00:00"}));
+        assert_eq!(v["provenance"]["keywords"], serde_json::json!({"kind": "user"}));
+        assert_eq!(v["provenance"]["caption"], serde_json::json!({"kind": "exif"}));
+        let back: Meta = serde_json::from_value(v).unwrap();
+        assert_eq!(back, m);
+        // a catalog's meta from before provenance existed
+        let old = r#"{"camera":"X","lens":"","focal_mm":null,"aperture":null,"shutter":"","iso":null,"location":"","city":"","state":"","country":"","gps":null,"title":"T","caption":"C","alt_text":"","extended_description":"","copyright":"","creator":"","keywords":["a"]}"#;
+        let m: Meta = serde_json::from_str(old).unwrap();
+        assert!(m.provenance.is_empty());
+        assert_eq!((m.title.as_str(), m.keywords.len()), ("T", 1));
+        assert!(
+            serde_json::from_str::<Meta>(r#"{"provenance": {"title": {"kind": "oracle"}}}"#).is_err(),
+            "an unknown origin is an error, not a guess"
+        );
+        assert!(PROVENANCE_FIELDS.contains(&"alt_text"));
+    }
 
     #[test]
     fn raw_with_import_settings_is_not_edited() {

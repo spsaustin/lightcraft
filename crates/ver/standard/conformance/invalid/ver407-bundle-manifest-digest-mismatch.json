@@ -1,0 +1,101 @@
+{
+  "ver_version": "1.1",
+  "cpnp_version": "1.0",
+  "record_id": "3de2841c-4f70-51ea-b53c-67fa4e374008",
+  "created_at": "2026-08-25T10:00:00Z",
+  "generator": {
+    "name": "ver-conformance-corpus",
+    "version": "1.1-draft"
+  },
+  "conformance_level": "L0",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "2e780d9e1eb8bb9576e26ba76e385e70ff80bc99f316d44c1498b15e9ed03bb2"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "e4b8b387e35f8442aabc7d6f0b69cb191b8b836192b3715e772722fc9532e6e1",
+      "width": 8,
+      "height": 6
+    }
+  },
+  "image": {
+    "format": "png",
+    "width": 8,
+    "height": 6,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "kind": "visual",
+      "model": {
+        "family": "corpus-vision",
+        "architecture": "ViT-Tiny/4",
+        "checkpoint": "corpus-visual-v1",
+        "weights_sha256": "0dfcf4dea153bcdd0b54278d172169c714913c5e71a5896f923359a247f02afb",
+        "bundle": {
+          "bundle_digest_alg": "ver-bundle-manifest/1",
+          "manifest_sha256": "2fad3778527cfc1603ceb6d770a150b7deb0c62f85cda2456404b90dd5fee2b1",
+          "files": [
+            {
+              "path": "config.json",
+              "byte_length": 56,
+              "sha256": "4bd4493b14f8d89aa8f1317bc2c58ef1db4aad2184dd2ce7e13c099974b0230b"
+            },
+            {
+              "path": "model.safetensors",
+              "byte_length": 62,
+              "sha256": "528782da16793f6a28db7127e444246253acd342ab2e7b1011e7873c456568fb"
+            }
+          ]
+        }
+      },
+      "dim": 4,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_4",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_4",
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "channel_order": "rgb"
+      },
+      "reference": {
+        "set_uri": "https://refsets.example.org/corpus-visual-1.1",
+        "set_manifest_sha256": "58d6aed1be8e7c8eb56139e007ea3ded1c6f5a675ba50ea86ec75ed5f5835bbe",
+        "tolerance_cosine": 0.999
+      }
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "dim": 4,
+      "dtype": "fp32",
+      "vector": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "produced_at": "2026-08-25T09:00:03Z",
+      "producer": "ver-conformance-corpus/1.1-draft"
+    }
+  ]
+}

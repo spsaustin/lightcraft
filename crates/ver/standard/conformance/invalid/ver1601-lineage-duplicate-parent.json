@@ -1,0 +1,113 @@
+{
+  "ver_version": "1.1",
+  "cpnp_version": "1.0",
+  "record_id": "67747bcd-94e3-5076-bb53-025f2895c675",
+  "created_at": "2026-08-25T10:00:00Z",
+  "generator": {
+    "name": "ver-conformance-corpus",
+    "version": "1.1-draft"
+  },
+  "conformance_level": "L0",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "1085c05b7dcc3cae1269a315d4c2c624e035727a910ead2deb91d3c5a16b7637"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "f510c70535a6693877c2e5e37ae6759b0a6efcb91c923ad9cbfd000aade913ce",
+      "width": 8,
+      "height": 6
+    }
+  },
+  "image": {
+    "format": "png",
+    "width": 8,
+    "height": 6,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false
+  },
+  "lineage": {
+    "parents": [
+      {
+        "record_uri": "https://records.example.org/ver/2b6c9bf1-6746-575e-81bf-fa79e80f4cfd",
+        "producer_id": "did:web:corpus.example.org",
+        "record_id": "2b6c9bf1-6746-575e-81bf-fa79e80f4cfd",
+        "content_hash": "5280b823f56b5b08833cff2b0d4eb14da85faf064202eba21931e0f83636f358",
+        "pixel_hash": {
+          "value": "18605779d01e50a5de447efae05efd38bd087a3cf0251cd12b50fc81f3ecf698",
+          "cpnp_version": "1.0"
+        },
+        "relation": "composed",
+        "note": "left panel"
+      },
+      {
+        "record_uri": "https://records.example.org/ver/2b6c9bf1-6746-575e-81bf-fa79e80f4cfd",
+        "producer_id": "did:web:corpus.example.org",
+        "record_id": "2b6c9bf1-6746-575e-81bf-fa79e80f4cfd",
+        "content_hash": "5280b823f56b5b08833cff2b0d4eb14da85faf064202eba21931e0f83636f358",
+        "pixel_hash": {
+          "value": "18605779d01e50a5de447efae05efd38bd087a3cf0251cd12b50fc81f3ecf698",
+          "cpnp_version": "1.0"
+        },
+        "relation": "composed",
+        "note": "left panel"
+      }
+    ]
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "kind": "visual",
+      "model": {
+        "family": "corpus-vision",
+        "architecture": "ViT-Tiny/4",
+        "checkpoint": "corpus-visual-v1",
+        "weights_sha256": "0dfcf4dea153bcdd0b54278d172169c714913c5e71a5896f923359a247f02afb"
+      },
+      "dim": 4,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "resize": "shortest_side_4",
+        "interpolation": "bicubic",
+        "antialias": true,
+        "crop": "center_4",
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "channel_order": "rgb"
+      },
+      "reference": {
+        "set_uri": "https://refsets.example.org/corpus-visual-1.1",
+        "set_manifest_sha256": "58d6aed1be8e7c8eb56139e007ea3ded1c6f5a675ba50ea86ec75ed5f5835bbe",
+        "tolerance_cosine": 0.999
+      }
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "canonical_visual",
+      "space_id": "org.verstandard.space.corpus-visual/1.1",
+      "dim": 4,
+      "dtype": "fp32",
+      "vector": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "produced_at": "2026-08-25T09:00:03Z",
+      "producer": "ver-conformance-corpus/1.1-draft"
+    }
+  ]
+}

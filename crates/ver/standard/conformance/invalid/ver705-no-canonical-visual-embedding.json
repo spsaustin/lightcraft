@@ -1,0 +1,94 @@
+{
+  "ver_version": "1.0",
+  "cpnp_version": "1.0",
+  "record_id": "cb46441b-05c9-5900-b1fa-97ef6fbaac44",
+  "created_at": "2026-08-22T09:14:20Z",
+  "generator": {
+    "name": "ver-conformance-corpus",
+    "version": "1.0.1"
+  },
+  "conformance_level": "L0",
+  "identity": {
+    "content_hash": {
+      "alg": "sha-256",
+      "value": "45656e3ec534f0e6993853cbe1c9645ce535741ddbb1a1fc69c8673c303a685b"
+    },
+    "pixel_hash": {
+      "alg": "sha-256",
+      "value": "c87ca9f2ee178aa90e590fa07f095e39dbc2165f4a6fbeeb0cd8028044fbc5b9",
+      "width": 4032,
+      "height": 3024
+    },
+    "perceptual": [
+      {
+        "alg": "pdq/1.0",
+        "value": "0d9fcc58abcbea94dc55669723d8d8f13bb6c0c121b9aea65901f02293f69773"
+      },
+      {
+        "alg": "phash-dct/64",
+        "value": "1f4a0b21cc1277c7"
+      }
+    ]
+  },
+  "image": {
+    "format": "jpeg",
+    "width": 4032,
+    "height": 3024,
+    "animated": false,
+    "alpha_present": false,
+    "hdr_present": false,
+    "source_bytes_ref": {
+      "uri": "https://assets.example.org/blobs/boardwalk-sunset.jpg",
+      "sha256": "45656e3ec534f0e6993853cbe1c9645ce535741ddbb1a1fc69c8673c303a685b",
+      "byte_length": 2841377
+    }
+  },
+  "spaces": [
+    {
+      "space_id": "org.verstandard.space.minilm-l6-v2/1.0",
+      "kind": "text",
+      "model": {
+        "family": "sentence-transformers",
+        "architecture": "MiniLM-L6",
+        "checkpoint": "all-MiniLM-L6-v2",
+        "weights_sha256": "06ecad8d35617e69f1858cd2ec4d83c28facb36bee1ea3769253c5a19d0f5312"
+      },
+      "dim": 384,
+      "dtype": "fp32",
+      "normalization": "l2",
+      "metric": "cosine",
+      "preprocessing": {
+        "tokenizer": "bert-base-uncased-wordpiece",
+        "tokenizer_sha256": "5ffe4020660c769f31f9db24323875cfecb277e7da3058f0cb900dc0b6d439c7",
+        "max_length": 256,
+        "truncation": "tail",
+        "casing": "lower"
+      },
+      "reference": {
+        "set_uri": "https://verstandard.org/refsets/minilm-l6-v2-1.0",
+        "tolerance_cosine": 0.999
+      }
+    }
+  ],
+  "embeddings": [
+    {
+      "role": "contextual",
+      "space_id": "org.verstandard.space.minilm-l6-v2/1.0",
+      "dim": 384,
+      "dtype": "fp32",
+      "source": {
+        "class": "alt_text",
+        "text_sha256": "04351d8eb978a7dbcd746c5f09ff71082284c595a0a7f0dd9bd3f74aa07ff172",
+        "lang": "en",
+        "provenance": "og:image:alt at the acquisition URI"
+      },
+      "vector_ref": {
+        "uri": "https://vectors.example.org/boardwalk-sunset/contextual-alt-text-minilm-l6-v2.bin",
+        "sha256": "4abf2af24b92f0ebd4a8227ae900fd6f227fa1333aede3fc24d77dd7fb93a006",
+        "byte_length": 1536
+      },
+      "produced_at": "2026-08-22T09:14:10Z",
+      "producer": "ver-producer/1.0.3"
+    }
+  ]
+}

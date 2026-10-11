@@ -765,6 +765,11 @@ fn main() -> eframe::Result {
                 std::env::var_os("LIGHTCRAFT_SAM3_DIR").map(std::path::PathBuf::from).or_else(|| config_dir().map(|d| d.join("models").join("sam3")));
             // the user's own download locations, one base URL per line (LIGHTCRAFT_SAM3_MIRRORS too)
             session.segmenter.mirrors_file = config_dir().map(|d| d.join("models").join("sam3-mirrors.txt"));
+            // search by meaning: the SigLIP 2 checkpoint in <config>/models/siglip2-base-patch32-256, or
+            // LIGHTCRAFT_SIGLIP2_DIR (downloaded only when the user asks; see docs/vera.md)
+            session.vera_model_dir = std::env::var_os("LIGHTCRAFT_SIGLIP2_DIR")
+                .map(std::path::PathBuf::from)
+                .or_else(|| config_dir().map(|d| d.join("models").join("siglip2-base-patch32-256")));
             let mut app = LightcraftApp::new(session, services(cc.egui_ctx.clone(), app_log_file.as_deref()));
             if let Some(ui) = prefs {
                 app.ui = ui;
