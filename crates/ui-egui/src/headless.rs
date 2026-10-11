@@ -234,6 +234,18 @@ pub struct Headless {
     pub last_cursor: egui::CursorIcon,
 }
 
+/// The demo library with every picture already fingerprinted (`vera.digest`), for tests: background fingerprinting
+/// otherwise runs during a test's first seconds, and its row in the activity stack sits over the top of the window.
+#[cfg(test)]
+pub(crate) fn fingerprinted_demo() -> lightcraft_engine::Session {
+    let mut s = lightcraft_engine::Session::with_demo();
+    let ids: Vec<u64> = s.catalog.photos().map(|p| p.id.0).collect();
+    if let Err(e) = s.execute("vera.digest", &json!({"ids": ids})) {
+        log::warn!("vera.digest: {e}");
+    }
+    s
+}
+
 impl Headless {
     /// Wrap `app` (its control channel is replaced by the driver's).
     /// Invalid dimensions fall back to 1600×1000 at scale 1; external callers can use
@@ -662,7 +674,7 @@ mod tests {
 
     fn demo(size: [f32; 2]) -> Headless {
         let services = crate::Services { png: None, ..Default::default() };
-        let mut app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), services);
+        let mut app = LightcraftApp::new(super::fingerprinted_demo(), services);
         app.ui.view = crate::state::ViewMode::PhotoGrid;
         Headless::new(app, size, 1.0)
     }

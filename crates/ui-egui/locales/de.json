@@ -2031,5 +2031,13 @@
   "Downloading model": "Modell wird heruntergeladen",
   "Finding faces": "Gesichter werden gesucht",
   "Synchronizing folder": "Ordner wird synchronisiert",
-  "Looking for changes": "Änderungen werden gesucht"
+  "Looking for changes": "Änderungen werden gesucht",
+  "Show Duplicates": "Duplikate anzeigen",
+  " · 1 stacked under its original": " · 1 unter seinem Original gestapelt",
+  "Same picture": "Dasselbe Bild",
+  "Possibly the same": "Möglicherweise gleich",
+  "Same pictures": "Gleiche Bilder",
+  "Stack under the original": "Unter dem Original stapeln",
+  "Import anyway": "Trotzdem importieren",
+  "Fingerprinting photos": "Fingerabdrücke der Fotos werden erstellt"
 }

@@ -228,5 +228,15 @@
   "+{n} more": "+{n} mais",
   "1 task is still running: {names}. Quitting stops it.": "1 tarefa ainda está em andamento: {names}. Sair a interrompe.",
   "{n} tasks are still running: {names}. Quitting stops them.": "{n} tarefas ainda estão em andamento: {names}. Sair as interrompe.",
-  "{what} merge cancelled": "{what} mesclagem cancelada"
+  "{what} merge cancelled": "{what} mesclagem cancelada",
+  "No photos match “{query}”": "Nenhuma foto corresponde a “{query}”",
+  "No duplicates of {name} found yet · {pending} photos still to fingerprint": "Nenhuma duplicata de {name} encontrada ainda · faltam {pending} fotos para analisar",
+  "No duplicates of {name} found": "Nenhuma duplicata de {name} encontrada",
+  "Ranked: “{query}”": "Por relevância: “{query}”",
+  "Duplicates of {name}": "Duplicatas de {name}",
+  " · {stacked} stacked under their originals": " · {stacked} empilhadas sob os originais",
+  "PDQ {pdq} of 256 bits apart, pHash {phash} of 64": "PDQ: {pdq} de 256 bits diferentes, pHash: {phash} de 64",
+  "The same picture as {name} in the library ({distances})": "A mesma imagem que {name} na biblioteca ({distances})",
+  "Possibly the same picture as {name} in the library ({distances})": "Possivelmente a mesma imagem que {name} na biblioteca ({distances})",
+  "{same} found: resizes or re-exports of photos in the library": "{same} encontradas: fotos da biblioteca redimensionadas ou reexportadas"
 }

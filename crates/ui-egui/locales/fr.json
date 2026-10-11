@@ -1876,5 +1876,13 @@
   "Downloading model": "Téléchargement du modèle",
   "Finding faces": "Recherche des visages",
   "Synchronizing folder": "Synchronisation du dossier",
-  "Looking for changes": "Recherche des modifications"
+  "Looking for changes": "Recherche des modifications",
+  "Show Duplicates": "Afficher les doublons",
+  " · 1 stacked under its original": " · 1 empilée sous son original",
+  "Same picture": "Même image",
+  "Possibly the same": "Peut-être identique",
+  "Same pictures": "Mêmes images",
+  "Stack under the original": "Empiler sous l’original",
+  "Import anyway": "Importer quand même",
+  "Fingerprinting photos": "Calcul des empreintes des photos"
 }

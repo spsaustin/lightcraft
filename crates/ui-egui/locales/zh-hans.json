@@ -1876,5 +1876,13 @@
   "Downloading model": "正在下载模型",
   "Finding faces": "正在查找人脸",
   "Synchronizing folder": "正在同步文件夹",
-  "Looking for changes": "正在查找更改"
+  "Looking for changes": "正在查找更改",
+  "Show Duplicates": "显示重复照片",
+  " · 1 stacked under its original": " · 1 张已堆叠到原照片下",
+  "Same picture": "同一图像",
+  "Possibly the same": "可能相同",
+  "Same pictures": "相同图像",
+  "Stack under the original": "堆叠到原照片下",
+  "Import anyway": "仍然导入",
+  "Fingerprinting photos": "正在生成照片指纹"
 }

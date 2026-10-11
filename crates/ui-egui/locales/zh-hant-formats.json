@@ -228,5 +228,15 @@
   "+{n} more": "還有 {n} 項",
   "1 task is still running: {names}. Quitting stops it.": "仍有 1 個工作在執行：{names}。結束將停止它。",
   "{n} tasks are still running: {names}. Quitting stops them.": "仍有 {n} 個工作在執行：{names}。結束將停止它們。",
-  "{what} merge cancelled": "已取消{what}合併"
+  "{what} merge cancelled": "已取消{what}合併",
+  "No photos match “{query}”": "沒有符合「{query}」的照片",
+  "No duplicates of {name} found yet · {pending} photos still to fingerprint": "尚未找到 {name} 的重複照片 · 還有 {pending} 張照片未產生指紋",
+  "No duplicates of {name} found": "未找到 {name} 的重複照片",
+  "Ranked: “{query}”": "依相關性：「{query}」",
+  "Duplicates of {name}": "{name} 的重複照片",
+  " · {stacked} stacked under their originals": " · {stacked} 張已堆疊到原始照片下",
+  "PDQ {pdq} of 256 bits apart, pHash {phash} of 64": "PDQ：256 位元中有 {pdq} 位元不同，pHash：64 位元中有 {phash} 位元",
+  "The same picture as {name} in the library ({distances})": "與照片庫中的 {name} 是同一張影像（{distances}）",
+  "Possibly the same picture as {name} in the library ({distances})": "可能與照片庫中的 {name} 是同一張影像（{distances}）",
+  "{same} found: resizes or re-exports of photos in the library": "找到 {same} 張：照片庫中照片的縮放版或重新輸出版"
 }

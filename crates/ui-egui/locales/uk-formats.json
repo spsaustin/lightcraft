@@ -228,5 +228,15 @@
   "+{n} more": "+{n} ще",
   "1 task is still running: {names}. Quitting stops it.": "1 завдання ще виконується: {names}. Вихід зупинить його.",
   "{n} tasks are still running: {names}. Quitting stops them.": "Ще виконуються завдання ({n}): {names}. Вихід зупинить їх.",
-  "{what} merge cancelled": "Об’єднання {what} скасовано"
+  "{what} merge cancelled": "Об’єднання {what} скасовано",
+  "No photos match “{query}”": "Немає фото за запитом «{query}»",
+  "No duplicates of {name} found yet · {pending} photos still to fingerprint": "Дублікатів {name} поки не знайдено · ще не проаналізовано фото: {pending}",
+  "No duplicates of {name} found": "Дублікатів {name} не знайдено",
+  "Ranked: “{query}”": "За релевантністю: «{query}»",
+  "Duplicates of {name}": "Дублікати {name}",
+  " · {stacked} stacked under their originals": " · у стоси під оригіналами: {stacked}",
+  "PDQ {pdq} of 256 bits apart, pHash {phash} of 64": "PDQ: відрізняються {pdq} з 256 біт, pHash: {phash} з 64",
+  "The same picture as {name} in the library ({distances})": "Те саме зображення, що {name} у бібліотеці ({distances})",
+  "Possibly the same picture as {name} in the library ({distances})": "Можливо, те саме зображення, що {name} у бібліотеці ({distances})",
+  "{same} found: resizes or re-exports of photos in the library": "Знайдено: {same} — зменшені або повторно експортовані фото з бібліотеки"
 }

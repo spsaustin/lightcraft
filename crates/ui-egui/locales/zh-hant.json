@@ -1876,5 +1876,13 @@
   "Downloading model": "正在下載模型",
   "Finding faces": "正在尋找臉孔",
   "Synchronizing folder": "正在同步資料夾",
-  "Looking for changes": "正在尋找變更"
+  "Looking for changes": "正在尋找變更",
+  "Show Duplicates": "顯示重複照片",
+  " · 1 stacked under its original": " · 1 張已堆疊到原始照片下",
+  "Same picture": "同一影像",
+  "Possibly the same": "可能相同",
+  "Same pictures": "相同影像",
+  "Stack under the original": "堆疊到原始照片下",
+  "Import anyway": "仍然匯入",
+  "Fingerprinting photos": "正在產生照片指紋"
 }

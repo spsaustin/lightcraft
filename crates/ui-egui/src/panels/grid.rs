@@ -894,6 +894,11 @@ pub fn context_menu(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
             Err(e) => app.toast(ui.ctx(), e),
         }
     }
+    if ui.button(crate::i18n::tr("Show Duplicates")).clicked()
+        && let Err(e) = app.run("photo.showDuplicates", json!({"id": id.0}))
+    {
+        app.toast(ui.ctx(), e);
+    }
     if ui.button(crate::i18n::tr("Set as Reference Photo")).clicked() {
         let _ = app.run("photo.setReference", json!({"id": id.0}));
     }

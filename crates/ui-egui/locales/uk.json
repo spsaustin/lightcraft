@@ -2070,5 +2070,13 @@
   "Downloading model": "Завантаження моделі",
   "Finding faces": "Пошук облич",
   "Synchronizing folder": "Синхронізація папки",
-  "Looking for changes": "Пошук змін"
+  "Looking for changes": "Пошук змін",
+  "Show Duplicates": "Показати дублікати",
+  " · 1 stacked under its original": " · 1 у стосі під оригіналом",
+  "Same picture": "Те саме фото",
+  "Possibly the same": "Можливо, те саме",
+  "Same pictures": "Ті самі фото",
+  "Stack under the original": "У стос під оригіналом",
+  "Import anyway": "Усе одно імпортувати",
+  "Fingerprinting photos": "Створення відбитків фото"
 }

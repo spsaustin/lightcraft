@@ -1878,5 +1878,13 @@
   "Downloading model": "モデルをダウンロード中",
   "Finding faces": "顔を検索中",
   "Synchronizing folder": "フォルダを同期中",
-  "Looking for changes": "変更を確認中"
+  "Looking for changes": "変更を確認中",
+  "Show Duplicates": "重複を表示",
+  " · 1 stacked under its original": " · 1 枚を元の写真の下にスタック",
+  "Same picture": "同じ画像",
+  "Possibly the same": "同じ可能性",
+  "Same pictures": "同じ画像",
+  "Stack under the original": "元の写真の下にスタック",
+  "Import anyway": "そのまま読み込む",
+  "Fingerprinting photos": "写真の指紋を作成中"
 }

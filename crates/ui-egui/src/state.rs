@@ -505,6 +505,32 @@ pub struct UiState {
     pub status: String,
     #[serde(skip)]
     pub dialog: Option<Dialog>,
+    /// The grid shows a ranked search's results or a photo's duplicates (the filter's `only` list, set by
+    /// `search.text` / `photo.duplicates`): what its chip says, and the sort to go back to (`panels::vera`).
+    #[serde(skip)]
+    pub only_origin: Option<OnlyOrigin>,
+    /// The import review's "Same pictures" choice (`stack`, `import` or `skip`; "" is the default, stack), kept
+    /// for the session.
+    #[serde(skip)]
+    pub import_near_duplicate: String,
+}
+
+/// Where the filter's `only` list came from, so its chip can say so and its × can put the view back.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OnlyOrigin {
+    pub kind: OnlyKind,
+    /// The list it set: once the filter's `only` is anything else, this origin is over.
+    pub ids: Vec<lightcraft_catalog::PhotoId>,
+    /// The sort from before a ranked search switched to relevance (restored when the results go).
+    pub sort: Option<lightcraft_catalog::Sort>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum OnlyKind {
+    /// `search.text`: the results of this query, best first.
+    Ranked { query: String },
+    /// `photo.duplicates`: the photo (by file name) and the photos that are the same picture.
+    Duplicates { name: String },
 }
 
 /// Settings group ids (`SettingsGroup` serde names) a new preset includes by default: everything
@@ -883,6 +909,8 @@ impl Default for UiState {
             last_find_missing: None,
             status: String::new(),
             dialog: None,
+            only_origin: None,
+            import_near_duplicate: String::new(),
         }
     }
 }

@@ -228,5 +228,15 @@
   "+{n} more": "ほか{n}件",
   "1 task is still running: {names}. Quitting stops it.": "1件のタスクが実行中です：{names}。終了すると停止します。",
   "{n} tasks are still running: {names}. Quitting stops them.": "{n}件のタスクが実行中です：{names}。終了すると停止します。",
-  "{what} merge cancelled": "{what}合成をキャンセルしました"
+  "{what} merge cancelled": "{what}合成をキャンセルしました",
+  "No photos match “{query}”": "「{query}」に一致する写真はありません",
+  "No duplicates of {name} found yet · {pending} photos still to fingerprint": "{name} の重複はまだ見つかっていません · 指紋未作成の写真: {pending}",
+  "No duplicates of {name} found": "{name} の重複は見つかりませんでした",
+  "Ranked: “{query}”": "関連順: 「{query}」",
+  "Duplicates of {name}": "{name} の重複",
+  " · {stacked} stacked under their originals": " · {stacked} 枚を元の写真の下にスタック",
+  "PDQ {pdq} of 256 bits apart, pHash {phash} of 64": "PDQ: 256 ビット中 {pdq} ビットが相違、pHash: 64 中 {phash}",
+  "The same picture as {name} in the library ({distances})": "ライブラリの {name} と同じ画像 ({distances})",
+  "Possibly the same picture as {name} in the library ({distances})": "ライブラリの {name} と同じ画像の可能性 ({distances})",
+  "{same} found: resizes or re-exports of photos in the library": "{same} 件: ライブラリの写真のリサイズ版または再書き出し版"
 }

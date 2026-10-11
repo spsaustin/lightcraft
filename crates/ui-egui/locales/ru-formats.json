@@ -228,5 +228,15 @@
   "+{n} more": "ещё {n}",
   "1 task is still running: {names}. Quitting stops it.": "Ещё выполняется задача: {names}. Выход прервёт её.",
   "{n} tasks are still running: {names}. Quitting stops them.": "Ещё выполняется задач: {n} — {names}. Выход прервёт их.",
-  "{what} merge cancelled": "{what}: слияние отменено"
+  "{what} merge cancelled": "{what}: слияние отменено",
+  "No photos match “{query}”": "Нет фото по запросу «{query}»",
+  "No duplicates of {name} found yet · {pending} photos still to fingerprint": "Дубликаты {name} пока не найдены · ещё не проанализировано фото: {pending}",
+  "No duplicates of {name} found": "Дубликаты {name} не найдены",
+  "Ranked: “{query}”": "По релевантности: «{query}»",
+  "Duplicates of {name}": "Дубликаты {name}",
+  " · {stacked} stacked under their originals": " · в стопки под оригиналами: {stacked}",
+  "PDQ {pdq} of 256 bits apart, pHash {phash} of 64": "PDQ: различаются {pdq} из 256 бит, pHash: {phash} из 64",
+  "The same picture as {name} in the library ({distances})": "То же изображение, что {name} в библиотеке ({distances})",
+  "Possibly the same picture as {name} in the library ({distances})": "Возможно, то же изображение, что {name} в библиотеке ({distances})",
+  "{same} found: resizes or re-exports of photos in the library": "Найдено: {same} — уменьшенные или заново экспортированные фото из библиотеки"
 }

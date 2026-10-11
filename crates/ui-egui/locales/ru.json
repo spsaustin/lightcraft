@@ -1590,5 +1590,13 @@
   "Finding faces": "Поиск лиц",
   "Quit Anyway": "Всё равно выйти",
   "Synchronizing folder": "Синхронизация папки",
-  "Looking for changes": "Поиск изменений"
+  "Looking for changes": "Поиск изменений",
+  "Show Duplicates": "Показать дубликаты",
+  " · 1 stacked under its original": " · 1 в стопке под оригиналом",
+  "Same picture": "То же фото",
+  "Possibly the same": "Возможно, то же",
+  "Same pictures": "Те же фото",
+  "Stack under the original": "В стопку под оригиналом",
+  "Import anyway": "Всё равно импортировать",
+  "Fingerprinting photos": "Создание отпечатков фото"
 }

@@ -228,5 +228,15 @@
   "+{n} more": "还有 {n} 项",
   "1 task is still running: {names}. Quitting stops it.": "仍有 1 个任务在运行：{names}。退出将停止它。",
   "{n} tasks are still running: {names}. Quitting stops them.": "仍有 {n} 个任务在运行：{names}。退出将停止它们。",
-  "{what} merge cancelled": "已取消 {what} 合并"
+  "{what} merge cancelled": "已取消 {what} 合并",
+  "No photos match “{query}”": "没有与“{query}”匹配的照片",
+  "No duplicates of {name} found yet · {pending} photos still to fingerprint": "尚未找到 {name} 的重复照片 · 还有 {pending} 张照片未生成指纹",
+  "No duplicates of {name} found": "未找到 {name} 的重复照片",
+  "Ranked: “{query}”": "按相关性：“{query}”",
+  "Duplicates of {name}": "{name} 的重复照片",
+  " · {stacked} stacked under their originals": " · {stacked} 张已堆叠到原照片下",
+  "PDQ {pdq} of 256 bits apart, pHash {phash} of 64": "PDQ：256 位中有 {pdq} 位不同，pHash：64 位中有 {phash} 位",
+  "The same picture as {name} in the library ({distances})": "与图库中的 {name} 是同一张图像（{distances}）",
+  "Possibly the same picture as {name} in the library ({distances})": "可能与图库中的 {name} 是同一张图像（{distances}）",
+  "{same} found: resizes or re-exports of photos in the library": "找到 {same} 张：图库中照片的缩放版或重新导出版"
 }

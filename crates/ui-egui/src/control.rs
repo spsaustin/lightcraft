@@ -108,6 +108,8 @@ pub fn inspect(app: &LightcraftApp, ctx: &egui::Context) -> Value {
         "quitPrompt": app.quit_prompt.as_ref().map(crate::QuitPrompt::text),
         // how hard the background face scan may work right now, and why it is judged so (see `panels::faces::scan_pace`)
         "faceScan": {"pace": app.caches.faces_pace, "focused": app.caches.faces_in_front, "pending": app.caches.faces_pending, "indexed": app.caches.faces_indexed},
+        // background fingerprinting for duplicates and the import check, at the face scan's pace (`panels::vera::pump`)
+        "vera": crate::panels::vera::inspect(app),
         "unsaved": app.session.unsaved().map(|(n, e)| json!({"ops": n, "error": e})),
         "libraryProblem": app.library_problem.as_ref().map(crate::panels::library_problem::LibraryProblem::to_json),
         "scan": app.scan.as_ref().map(crate::import::ScanTask::status),
