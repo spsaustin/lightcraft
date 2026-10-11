@@ -251,6 +251,45 @@ pub fn helper_tools(has_ui: bool) -> Vec<Value> {
             &[],
         ),
         tool(
+            "ver_record",
+            "A photo's VER Record",
+            "The photo's VER Record (Visual Embedding Record): its CPNP-1 identity (content_hash, pixel_hash, PDQ and pHash over the Canonical Buffer), its metadata segments byte-exact, the reconciled IPTC view with a trust tier per field, its acquisition, custody chain and C2PA status, and its canonical visual embedding in LightCraft's own space. Validated against its schema and the VERA profile before it is returned; `issues` lists the warnings (VER404: the space has no reference set, so the vector is comparable only within this producer; VER308: unsigned unless `ver.config {signKeyPath}` is set). Errors say why there is none: `no_cpnp_path` (a camera raw has no Record of its own; its exports do), `needs_model` (the embedding model is not installed; see `vera_model`), `no_asset` (a demo photo has no file). `schema` is \"1.1-draft\" (default) or \"1.0.1\". Read-only. Returns {record, issues, conformant, level, notes, schema}.",
+            json!({
+                "id": {"type": "integer", "description": "Photo id (default: the active photo)"},
+                "schema": {"type": "string", "enum": ["1.1-draft", "1.0.1"], "description": "Record schema (default 1.1-draft)"},
+                "level": {"type": "string", "enum": ["L0", "L1", "L2", "L3"], "description": "Highest conformance level to claim (default L3; the Record claims what its evidence supports)"}
+            }),
+            &[],
+        ),
+        tool(
+            "ver_import",
+            "Read a VER Record",
+            "Read a VER Record from a `.ver.json` file (`path`) or given inline (`record`, an object or its JSON text): it is validated under its own schema (schema + VERA profile), and an error-severity issue rejects it (status `rejected`, nothing matched). An accepted Record is matched against the library: `content` (the same bytes), `pixel_hash` (the same rendered pixels: a grouping, never an identity), `pdq` / `phash` (the same picture perceptually; score = differing bits) and `vector` (only in LightCraft's own space; score = cosine). Read-only: nothing in the library changes. Give exactly one of `path` and `record`. Returns {status, accepted, issues, matches: [{id, by, score}], recordSummary, pendingDigests}.",
+            json!({
+                "path": {"type": "string", "description": "A VER Record file"},
+                "record": {"type": ["object", "string"], "description": "A VER Record, as an object or JSON text"}
+            }),
+            &[],
+        ),
+        tool(
+            "ver_export",
+            "Write VER Records",
+            "Write the VER Records of photos (default: the selection) to the folder `dir`, as <content_hash>.ver.json, with the VER 1.0 twin <content_hash>.ver-1.0.json when `schema` is \"both\" (the default; the two share content_hash). A photo without a Record is listed in `skipped` with its code and reason (a raw: `no_cpnp_path`; no embedding model: `needs_model`). Never writes over a library original. Returns {written, files, skipped: [{id, code, reason}], dir}.",
+            json!({
+                "ids": ids_schema("Photo ids (default: the selection)"),
+                "dir": {"type": "string", "description": "Folder to write the Records into (created if needed)"},
+                "schema": {"type": "string", "enum": ["both", "1.1-draft", "1.0.1"], "description": "Which Records (default both)"}
+            }),
+            &["dir"],
+        ),
+        tool(
+            "ver_status",
+            "Whether VER Records can be made",
+            "Whether this session can produce VER Records and with what: `ready` with `reasons` when not (most often the embedding model is missing: `model.code` is `needs_model`, see `vera_model`), the reverse-DNS `authority` space ids are minted under (default org.verstandard), the `generator`, the `producerId`, `defaultSchema`, `exportSidecars` (whether exports write Records beside their files), `signing` ({enabled, keyId?, error?}), `model` ({ready, spaceId, dim, dtype, producer, weightsSha256}), `lastProduced`, and `claims`: LightCraft's space has no reference set (no conformance claim; vectors comparable only within this producer) and CPNP-1 identity is provisional until a second decoder evaluation is published. Read-only.",
+            json!({}),
+            &[],
+        ),
+        tool(
             "query_photos",
             "Query photos",
             "List photos (id, file name, size, rating, flag, edited…). Without filter/sort: the current library view.",
@@ -488,8 +527,11 @@ fn annotations(name: &str, title: &str) -> Value {
             | "ui_screenshot"
             | "vera_status"
             | "photo_keywords"
+            | "ver_status"
+            | "ver_record"
+            | "ver_import"
     );
-    let files = matches!(name, "export" | "render_photo" | "screenshot");
+    let files = matches!(name, "export" | "render_photo" | "screenshot" | "ver_export");
     // Like `select_photos`, these can change the view (their `filter` argument), so they are not
     // read-only; unlike it they never edit or delete anything, and repeating one changes nothing more.
     let view = matches!(name, "search_text" | "photo_duplicates" | "photo_similar");
@@ -855,6 +897,15 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> ToolResult {
         "photo_describe" => ToolResult::from(exec(b, "photo.describe", obj(args, &["ids", "keywordsOnly"]))),
         "describe_review" => describe_review(b, args),
         "photo_keywords" => ToolResult::from(exec(b, "photo.keywords", obj(args, &["id", "limit"]))),
+        "ver_record" => ToolResult::from(exec(b, "ver.record", obj(args, &["id", "schema", "level"]))),
+        "ver_import" => match (args.get("path").filter(|v| !v.is_null()), args.get("record").filter(|v| !v.is_null())) {
+            (Some(_), Some(_)) => ToolResult::error("give `path` or `record`, not both"),
+            (None, None) => ToolResult::error("missing `path` (a .ver.json file) or `record` (a VER Record)"),
+            _ => ToolResult::from(exec(b, "ver.import", obj(args, &["path", "record"]))),
+        },
+        "ver_export" if args.get("dir").is_none_or(Value::is_null) => ToolResult::error("missing `dir`"),
+        "ver_export" => ToolResult::from(exec(b, "ver.export", obj(args, &["ids", "dir", "schema"]))),
+        "ver_status" => ToolResult::from(exec(b, "ver.status", json!({}))),
         "query_photos" => ToolResult::from(exec(b, "catalog.query", obj(args, &["filter", "sort", "offset", "limit"]))),
         "select_photos" => {
             let mut p = obj(args, &["ids", "active", "mode"]);

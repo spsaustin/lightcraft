@@ -859,3 +859,114 @@ fn photo_keywords_without_the_model_is_an_error_naming_it() {
     assert!(call_tool(&mut b, "photo_keywords", &json!({"id": 9999})).is_error);
     assert!(call_tool(&mut b, "photo_keywords", &json!({"limit": 0})).is_error);
 }
+
+/// The VER tools are listed with their arguments and hints, and reject keys they do not have.
+#[test]
+fn ver_tools_are_listed_with_schemas_and_hints() {
+    let mut s = server();
+    let list = rpc(&mut s, 1, "tools/list", json!({}));
+    let tools = list["result"]["tools"].as_array().unwrap();
+    let tool = |n: &str| tools.iter().find(|t| t["name"] == n).unwrap_or_else(|| panic!("missing {n}"));
+    let hints = |n: &str| {
+        let a = &tool(n)["annotations"];
+        (a["readOnlyHint"].clone(), a["destructiveHint"].clone())
+    };
+    for (n, keys) in [
+        ("ver_record", &["id", "schema", "level"][..]),
+        ("ver_import", &["path", "record"]),
+        ("ver_export", &["ids", "dir", "schema"]),
+        ("ver_status", &[]),
+    ] {
+        for k in keys {
+            assert!(tool(n)["inputSchema"]["properties"].get(*k).is_some(), "{n}.{k}");
+        }
+        assert!(tool(n)["annotations"]["title"].is_string(), "{n}");
+    }
+    assert_eq!(tool("ver_export")["inputSchema"]["required"], json!(["dir"]));
+    assert_eq!(tool("ver_record")["inputSchema"]["properties"]["schema"]["enum"], json!(["1.1-draft", "1.0.1"]));
+    assert_eq!(tool("ver_export")["inputSchema"]["properties"]["schema"]["enum"], json!(["both", "1.1-draft", "1.0.1"]));
+    for n in ["ver_record", "ver_import", "ver_status"] {
+        assert_eq!(hints(n), (json!(true), json!(false)), "{n} is read-only");
+    }
+    assert_eq!(hints("ver_export"), (json!(false), json!(false)), "writes files, destroys nothing");
+    let d = tool("ver_record")["description"].as_str().unwrap();
+    for needle in ["no_cpnp_path", "needs_model", "no_asset", "VER404", "1.1-draft"] {
+        assert!(d.contains(needle), "ver_record lacks {needle}");
+    }
+    let d = tool("ver_import")["description"].as_str().unwrap();
+    for needle in ["pixel_hash", "never an identity", "rejected", "vector"] {
+        assert!(d.contains(needle), "ver_import lacks {needle}");
+    }
+    for name in ["ver_record", "ver_import", "ver_export", "ver_status"] {
+        let r = rpc(&mut s, 2, "tools/call", json!({"name": name, "arguments": {"misspelled": 1}}));
+        assert_eq!(r["error"]["code"], -32602, "{r}");
+        assert!(r["error"]["message"].as_str().unwrap().contains("misspelled"), "{r}");
+    }
+}
+
+/// The VER tools forward to the `ver.*` commands with their own arguments only, and refuse a call missing what it
+/// needs before the engine is asked.
+#[test]
+fn ver_tools_forward_to_the_engine() {
+    let mut rec = Recorder(vec![]);
+    for (name, args) in [
+        ("ver_record", json!({"id": 3, "schema": "1.0.1"})),
+        ("ver_import", json!({"path": "/tmp/a.ver.json"})),
+        ("ver_import", json!({"record": {"ver_version": "1.1"}})),
+        ("ver_export", json!({"ids": [1, 2], "dir": "/tmp/out", "schema": "both"})),
+        ("ver_status", json!({})),
+    ] {
+        assert!(!call_tool(&mut rec, name, &args).is_error, "{name}");
+    }
+    assert_eq!(
+        rec.0,
+        vec![
+            ("engine.execute".to_string(), json!({"command": "ver.record", "params": {"id": 3, "schema": "1.0.1"}})),
+            ("engine.execute".to_string(), json!({"command": "ver.import", "params": {"path": "/tmp/a.ver.json"}})),
+            ("engine.execute".to_string(), json!({"command": "ver.import", "params": {"record": {"ver_version": "1.1"}}})),
+            ("engine.execute".to_string(), json!({"command": "ver.export", "params": {"ids": [1, 2], "dir": "/tmp/out", "schema": "both"}})),
+            ("engine.execute".to_string(), json!({"command": "ver.status", "params": {}})),
+        ]
+    );
+    let mut rec = Recorder(vec![]);
+    for (name, args, needle) in [
+        ("ver_import", json!({}), "path"),
+        ("ver_import", json!({"path": "/a", "record": {}}), "not both"),
+        ("ver_export", json!({"ids": [1]}), "dir"),
+    ] {
+        let r = call_tool(&mut rec, name, &args);
+        assert!(r.is_error && text_of(&r).contains(needle), "{name}: {r:?}");
+    }
+    assert!(rec.0.is_empty(), "the engine was not called: {:?}", rec.0);
+}
+
+/// On the demo library: no model, so `ver_status` says why; a demo photo has no file, so no Record; a Record that is
+/// not one is refused; the engine's error codes come through.
+#[test]
+fn ver_tools_map_the_engines_errors() {
+    let mut b = Headless::demo();
+    let st = call_tool(&mut b, "ver_status", &json!({}));
+    assert!(!st.is_error, "{st:?}");
+    let v = st.structured.unwrap();
+    assert_eq!(v["ready"], false, "{v}");
+    assert_eq!(v["model"]["code"], "needs_model", "{v}");
+    assert_eq!(v["authority"], "org.verstandard");
+    assert_eq!(v["claims"]["reference"], false);
+    let first = b.session.visible_cloned()[0];
+    let r = call_tool(&mut b, "ver_record", &json!({"id": first.0}));
+    assert!(r.is_error && text_of(&r).contains("no_asset"), "{r:?}");
+    assert!(call_tool(&mut b, "ver_record", &json!({"id": 99_999})).is_error);
+    assert!(call_tool(&mut b, "ver_record", &json!({"schema": "2.0"})).is_error);
+    let r = call_tool(&mut b, "ver_import", &json!({"record": "{not json"}));
+    assert!(r.is_error && text_of(&r).contains("not a VER Record"), "{r:?}");
+    let r = call_tool(&mut b, "ver_import", &json!({"record": {"ver_version": "1.1"}}));
+    assert!(!r.is_error, "a malformed Record is a verdict, not an error: {r:?}");
+    assert_eq!(r.structured.unwrap()["status"], "rejected");
+    let dir = std::env::temp_dir().join(format!("lc-mcp-ver-{}", std::process::id()));
+    let r = call_tool(&mut b, "ver_export", &json!({"ids": [first.0], "dir": dir.to_string_lossy()}));
+    assert!(!r.is_error, "{r:?}");
+    let v = r.structured.unwrap();
+    assert_eq!(v["written"], 0);
+    assert_eq!(v["skipped"][0]["code"], "no_asset", "{v}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
