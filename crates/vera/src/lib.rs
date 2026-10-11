@@ -29,7 +29,10 @@ pub mod index;
 pub mod space;
 pub mod thresholds;
 
-pub use digest::{ALGORITHM_VERSION, Comparison, Digest, Luma, Sameness, compare, digest, distances, hamming64, hamming256, luma_from_rgb, sameness};
+pub use digest::{
+    ALGORITHM_VERSION, Comparison, Digest, Luma, Planes, Sameness, compare, digest, digest_planes, digest_rgb8, distances, hamming64, hamming256,
+    luma_from_rgb, sameness,
+};
 pub use fuse::rrf;
 pub use index::{Hit, Index};
 pub use space::Space;

@@ -15,3 +15,4 @@ lightcraft-scenes = { workspace = true }
 lightcraft-raster = { workspace = true }
 proptest = { workspace = true }
 image = { workspace = true }
+serde_json = { workspace = true }

@@ -8,16 +8,26 @@
 /// PDQ Hamming distance (of 256 bits) at or under which two frames are the **same picture**: the
 /// published PDQ guidance for near-duplicates, and in the VERA studio's measured set every resize
 /// and re-export came out far under it while the nearest genuinely different pair sat at 102.
+/// Re-measured with the reference-exact PDQ (`digest` tests, demo scene 0): resizes 2048/1024/512/
+/// 256 px 6–22 bits (8–24 with the earlier approximation), JPEG q85 and q50 re-exports 0 (2),
+/// gamma 1.1 4 (4), eight unrelated scenes at least 100 (100), a 70 % centre crop 132 (130).
 pub const PDQ_TIGHT: u32 = 31;
 /// PDQ distance at or under which two frames are **possibly** the same picture (a variant edit, a
 /// heavy crop, a burst neighbour): the studio's variant-edit pair sits at 38, inside; the nearest
 /// different pair at 102, outside. Nothing automatic acts on this band.
 pub const PDQ_LOOSE: u32 = 63;
 /// pHash Hamming distance (of 64 bits) for the same picture: the same proportion as PDQ's 31 of
-/// 256. Measured: every near-duplicate at 0, the nearest non-duplicate at 10.
+/// 256. Measured: every near-duplicate at 0, the nearest non-duplicate at 10. Re-measured with the
+/// reference-exact `imagehash` pHash: resizes 0 (0), JPEG q85 0 (0), q50 2 (0), gamma 1.1 2 (2),
+/// unrelated scenes at least 18 (18), the 70 % crop 22 (22).
 pub const PHASH_TIGHT: u32 = 6;
 /// pHash distance for a possible match, the same proportion as PDQ's 63 of 256.
 pub const PHASH_LOOSE: u32 = 12;
+/// The PDQ quality both frames need before a pHash match alone makes them the same picture. The
+/// reference pHash gives every flat frame the same digest (only the DC bit set: two flat greys of
+/// any levels are 0 bits apart), so a frame with no surviving gradient (quality 0) cannot vouch
+/// through pHash either. 1 keeps every frame with any detail in the pHash lane, as before.
+pub const PHASH_MIN_QUALITY: u8 = 1;
 /// PDQ's own 0..100 image-domain quality: how much significant gradient survived the 64×64
 /// decimation. Under this a frame is too flat to fingerprint and its digest never makes a tight
 /// match on its own (the reference implementation's recommended floor).
