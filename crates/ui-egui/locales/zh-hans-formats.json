@@ -265,5 +265,21 @@
   "Written by {model}": "由 {model} 撰写",
   "{who}, accepted {when}": "{who}，于 {when} 接受",
   "Error: {e}": "错误：{e}",
-  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} 是另一台计算机：请先勾选上方的复选框表示同意，然后才会向其发送照片。"
+  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} 是另一台计算机：请先勾选上方的复选框表示同意，然后才会向其发送照片。",
+  " · {n} skipped": " · 已跳过 {n} 张",
+  "Level {level}": "级别 {level}",
+  "PDQ: {bits} of 256 bits apart": "PDQ：256 位中相差 {bits} 位",
+  "Ready · signed as {key}": "就绪 · 签名为 {key}",
+  "Saved the VER Record as {path}": "已将 VER 记录保存为 {path}",
+  "Selected {n} matching photos": "已选择 {n} 张匹配的照片",
+  "The photo's file could not be read: {e}": "无法读取照片文件：{e}",
+  "The search-by-meaning model did not work: {e}": "“按含义搜索”模型无法工作：{e}",
+  "The signing key can't be used: {e}": "无法使用该签名密钥：{e}",
+  "VER: {n} of {total} files got no Record: {reason}": "VER：{total} 个文件中有 {n} 个没有记录：{reason}",
+  "Writing VER Records for {n} photos…": "正在为 {n} 张照片写入 VER 记录…",
+  "Wrote VER Records for {written} of {total} photos to {dir}": "已将 {total} 张照片中 {written} 张的 VER 记录写入 {dir}",
+  "by meaning: cosine {score:.3}": "按含义：余弦 {score:.3}",
+  "pHash: {bits} of 64 bits apart": "pHash：64 位中相差 {bits} 位",
+  "pixel-hashed {pixel} · provisional {provisional}": "已计算像素哈希 {pixel} · 临时 {provisional}",
+  "{n} photos are still being fingerprinted; matches may be incomplete": "仍有 {n} 张照片正在生成指纹；匹配结果可能不完整"
 }

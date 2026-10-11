@@ -345,6 +345,7 @@ impl Headless {
             || self.app.export.is_some()
             || self.app.session.denoise_busy()
             || !self.app.tasks.is_empty()
+            || crate::panels::ver::busy(&self.app)
             || !self.app.synthetic.is_empty()
             || !self.events.is_empty()
     }

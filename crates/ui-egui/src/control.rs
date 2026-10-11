@@ -435,7 +435,10 @@ pub fn default_export_dir() -> String {
 /// (exact output file, single photo), `ids` (default: the selection, else the active photo).
 pub fn export_active(app: &mut LightcraftApp, p: &Value) -> Result<Value, String> {
     use lightcraft_engine::export::{Destination, ExportOptions, export_batch};
-    let p = &app.session.export_params(p)?;
+    // the export dialog's "Write VER Records" (a UI parameter: the engine reads it from `ver.config`)
+    let mut p = p.clone();
+    let ver_records = p.as_object_mut().and_then(|o| o.remove("verRecords")).and_then(|v| v.as_bool());
+    let p = &app.session.export_params(&p)?;
     let mut opts = ExportOptions::from_params(p).map_err(|e| e.to_string())?;
     if let (Some(path), None) = (p.get("path").and_then(Value::as_str), p.get("format")) {
         let ext = path.rsplit_once('.').map_or("", |(_, e)| e);
@@ -474,13 +477,37 @@ pub fn export_active(app: &mut LightcraftApp, p: &Value) -> Result<Value, String
     }
     let to = Destination { dir: dir.clone(), exact };
     let background = p.get("background").and_then(Value::as_bool).unwrap_or(false) && app.services.write_shared.is_some();
+    // Settings' "Write VER Records beside exports" switched for this run when the dialog chose otherwise: the photos'
+    // Records are set up as they are prepared, so it is put back as soon as they are
+    let restore = ver_records.and_then(|on| crate::panels::ver::sidecars_for_run(app, on));
     let out = if background {
-        let items = lightcraft_engine::export::prepare_batch(&mut app.session, &ids, &opts)?;
-        crate::export_task::start(app, items, opts, to)?
+        match lightcraft_engine::export::prepare_batch(&mut app.session, &ids, &opts) {
+            Ok(items) => {
+                if let Some(before) = restore {
+                    crate::panels::ver::restore_sidecars(app, before);
+                }
+                crate::export_task::start(app, items, opts, to)
+            }
+            Err(e) => {
+                if let Some(before) = restore {
+                    crate::panels::ver::restore_sidecars(app, before);
+                }
+                Err(e)
+            }
+        }
     } else {
-        let w = app.services.write.as_mut().ok_or("no writer")?;
-        json!({"files": export_batch(&mut app.session, &ids, &opts, &to, &mut |path, bytes| w(path, bytes), &|path| std::path::Path::new(path).exists())?})
-    };
+        let r = match app.services.write.as_mut() {
+            Some(w) => {
+                export_batch(&mut app.session, &ids, &opts, &to, &mut |path, bytes| w(path, bytes), &|path| std::path::Path::new(path).exists())
+                    .map(|files| json!({"files": files}))
+            }
+            None => Err("no writer".to_string()),
+        };
+        if let Some(before) = restore {
+            crate::panels::ver::restore_sidecars(app, before);
+        }
+        r
+    }?;
     // remember for Export with Previous (and to prefill the dialog)
     let mut last = p.clone();
     if let Some(o) = last.as_object_mut() {

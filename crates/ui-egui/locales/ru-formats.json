@@ -265,5 +265,21 @@
   "Written by {model}": "Написано {model}",
   "{who}, accepted {when}": "{who}, принято {when}",
   "Error: {e}": "Ошибка: {e}",
-  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} — другой компьютер: отметьте поле выше, чтобы согласиться, прежде чем фото будут туда отправлены."
+  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} — другой компьютер: отметьте поле выше, чтобы согласиться, прежде чем фото будут туда отправлены.",
+  " · {n} skipped": " · пропущено: {n}",
+  "Level {level}": "Уровень {level}",
+  "PDQ: {bits} of 256 bits apart": "PDQ: различие {bits} из 256 бит",
+  "Ready · signed as {key}": "Готово · подпись {key}",
+  "Saved the VER Record as {path}": "Запись VER сохранена: {path}",
+  "Selected {n} matching photos": "Выбрано совпадающих фото: {n}",
+  "The photo's file could not be read: {e}": "Не удалось прочитать файл фото: {e}",
+  "The search-by-meaning model did not work: {e}": "Модель поиска по смыслу не сработала: {e}",
+  "The signing key can't be used: {e}": "Ключ подписи нельзя использовать: {e}",
+  "VER: {n} of {total} files got no Record: {reason}": "VER: файлов без записи — {n} из {total}: {reason}",
+  "Writing VER Records for {n} photos…": "Запись VER для фото: {n}…",
+  "Wrote VER Records for {written} of {total} photos to {dir}": "Записи VER для {written} из {total} фото записаны в {dir}",
+  "by meaning: cosine {score:.3}": "по смыслу: косинус {score:.3}",
+  "pHash: {bits} of 64 bits apart": "pHash: различие {bits} из 64 бит",
+  "pixel-hashed {pixel} · provisional {provisional}": "с хешем пикселей {pixel} · предварительные {provisional}",
+  "{n} photos are still being fingerprinted; matches may be incomplete": "Отпечатки ещё вычисляются для фото: {n}; совпадения могут быть неполными"
 }

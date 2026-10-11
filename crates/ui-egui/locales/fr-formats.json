@@ -265,5 +265,21 @@
   "Written by {model}": "Écrit par {model}",
   "{who}, accepted {when}": "{who}, accepté le {when}",
   "Error: {e}": "Erreur : {e}",
-  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} est un autre ordinateur : cochez la case ci-dessus pour accepter avant que des photos n’y soient envoyées."
+  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} est un autre ordinateur : cochez la case ci-dessus pour accepter avant que des photos n’y soient envoyées.",
+  " · {n} skipped": " · {n} ignorées",
+  "Level {level}": "Niveau {level}",
+  "PDQ: {bits} of 256 bits apart": "PDQ : {bits} bits sur 256 de différence",
+  "Ready · signed as {key}": "Prêt · signé en tant que {key}",
+  "Saved the VER Record as {path}": "Enregistrement VER enregistré sous {path}",
+  "Selected {n} matching photos": "{n} photos correspondantes sélectionnées",
+  "The photo's file could not be read: {e}": "Le fichier de la photo n’a pas pu être lu : {e}",
+  "The search-by-meaning model did not work: {e}": "Le modèle de recherche par le sens n’a pas fonctionné : {e}",
+  "The signing key can't be used: {e}": "La clé de signature est inutilisable : {e}",
+  "VER: {n} of {total} files got no Record: {reason}": "VER : {n} fichiers sur {total} n’ont pas reçu d’enregistrement : {reason}",
+  "Writing VER Records for {n} photos…": "Écriture des enregistrements VER de {n} photos…",
+  "Wrote VER Records for {written} of {total} photos to {dir}": "Enregistrements VER de {written} photos sur {total} écrits dans {dir}",
+  "by meaning: cosine {score:.3}": "par le sens : cosinus {score:.3}",
+  "pHash: {bits} of 64 bits apart": "pHash : {bits} bits sur 64 de différence",
+  "pixel-hashed {pixel} · provisional {provisional}": "avec hachage de pixels {pixel} · provisoires {provisional}",
+  "{n} photos are still being fingerprinted; matches may be incomplete": "{n} photos sont encore en cours d’empreinte ; les correspondances peuvent être incomplètes"
 }

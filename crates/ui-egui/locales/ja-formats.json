@@ -265,5 +265,21 @@
   "Written by {model}": "{model} が作成",
   "{who}, accepted {when}": "{who}、{when} に受け入れ",
   "Error: {e}": "エラー: {e}",
-  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} は別のコンピューターです: 写真を送信する前に上のボックスにチェックを入れて同意してください。"
+  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} は別のコンピューターです: 写真を送信する前に上のボックスにチェックを入れて同意してください。",
+  " · {n} skipped": " · スキップ: {n}",
+  "Level {level}": "レベル {level}",
+  "PDQ: {bits} of 256 bits apart": "PDQ: 256 ビット中 {bits} ビットの差",
+  "Ready · signed as {key}": "準備完了 · {key} で署名",
+  "Saved the VER Record as {path}": "VER レコードを {path} として保存しました",
+  "Selected {n} matching photos": "一致する写真を選択しました: {n}",
+  "The photo's file could not be read: {e}": "写真のファイルを読み込めませんでした: {e}",
+  "The search-by-meaning model did not work: {e}": "意味で検索のモデルが動作しませんでした: {e}",
+  "The signing key can't be used: {e}": "署名鍵を使えません: {e}",
+  "VER: {n} of {total} files got no Record: {reason}": "VER: {total} 件中 {n} 件のファイルにレコードがありません: {reason}",
+  "Writing VER Records for {n} photos…": "{n} 枚の写真の VER レコードを書き出しています…",
+  "Wrote VER Records for {written} of {total} photos to {dir}": "{total} 枚中 {written} 枚の VER レコードを {dir} に書き出しました",
+  "by meaning: cosine {score:.3}": "意味: コサイン {score:.3}",
+  "pHash: {bits} of 64 bits apart": "pHash: 64 ビット中 {bits} ビットの差",
+  "pixel-hashed {pixel} · provisional {provisional}": "ピクセルハッシュ済み {pixel} · 暫定 {provisional}",
+  "{n} photos are still being fingerprinted; matches may be incomplete": "まだ {n} 枚の写真の指紋を作成中です。一致は不完全かもしれません"
 }

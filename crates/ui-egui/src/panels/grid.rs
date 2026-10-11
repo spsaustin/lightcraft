@@ -626,6 +626,22 @@ fn cell(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId, r: Rect, square
         ui.interact(br, egui::Id::new(("preview-only-badge", id.0)), Sense::hover())
             .on_hover_text(crate::i18n::tr_format!("Preview only — {}", crate::widgets::preview_only_explanation(why)));
     }
+    if let Some(label) = crate::panels::vera::duplicate_tier(app, id).and_then(crate::panels::vera::tier_label) {
+        // Show Duplicates: how this photo is the same as the one it duplicates ("Same file", "Same pixels", …), at the
+        // image's bottom left above the badge bar (above the "Preview" pill when there is one)
+        let g = p.layout_no_wrap(crate::i18n::tr(label).into(), t.semibold(9.5), Color32::WHITE);
+        let lift = if photo.preview_only.is_some() { 20.0 } else { 0.0 };
+        let at = pos2(img_rect.left() + 6.0, img_rect.bottom() - 30.0 - 16.0 - lift);
+        let br = Rect::from_min_size(at, vec2(g.size().x + 14.0, 16.0));
+        p.rect_filled(br, 8.0, Color32::from_black_alpha(170));
+        p.galley(pos2(br.left() + 7.0, br.center().y - g.size().y / 2.0), g, Color32::WHITE);
+        register(ui.ctx(), format!("badge:duplicate:{}", id.0), br);
+        if label == "Same pixels" {
+            ui.interact(br, egui::Id::new(("duplicate-tier-badge", id.0)), Sense::hover()).on_hover_text(crate::i18n::tr(
+                "The same rendered pixels (an equal VER pixel hash): renditions that decode alike, grouped. Not proof that they are the same file.",
+            ));
+        }
+    }
     if photo.flag == Flag::Reject {
         p.rect_filled(img_rect, 0.0, Color32::from_black_alpha(110));
     }

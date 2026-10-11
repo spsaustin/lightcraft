@@ -138,11 +138,23 @@ pub fn settings_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
     } else {
         crate::i18n::tr_format!("{digested} of {photos} photos fingerprinted", digested = digested, photos = photos)
     };
+    // how many of those fingerprints are VER's (over the full-size Canonical Buffer, with a pixel hash)
+    let pixel = status["pixelHashed"].as_u64().unwrap_or(0);
+    let provisional = status["provisional"].as_u64().unwrap_or(0);
+    let counts = format!(
+        "{counts} · {}",
+        crate::i18n::tr_format!("pixel-hashed {pixel} · provisional {provisional}", pixel = pixel, provisional = provisional)
+    );
     let r = ui.label(RichText::new(counts).font(t.font(11.5)).color(t.text_label));
     register(ui.ctx(), "vera:counts", r.rect);
+    r.on_hover_text(crate::i18n::tr(PROVISIONAL_HELP));
     model_section(app, ui, t, &status, &model);
     describe_section(app, ui, t);
+    super::ver::settings_section(app, ui, t, &model);
 }
+
+/// What "provisional" means in the fingerprint counts.
+pub const PROVISIONAL_HELP: &str = "Pixel-hashed: fingerprinted over the full-size VER Canonical Buffer, with the pixel hash a VER Record carries. Provisional: files with no VER path here (camera raws, demo photos, the web build) get thumbnail-level fingerprints, good for duplicates and look-alikes but not VER.";
 
 /// The PRD's sentence, shown at the moment photos would leave this computer (the consent `allowRemoteHost` stands for).
 pub const REMOTE_CONSENT: &str = "Preview-sized copies of the frames you choose will be sent to this address. LightCraft does not operate it.";

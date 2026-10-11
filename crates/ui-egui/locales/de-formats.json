@@ -265,5 +265,21 @@
   "Written by {model}": "Geschrieben von {model}",
   "{who}, accepted {when}": "{who}, übernommen am {when}",
   "Error: {e}": "Fehler: {e}",
-  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} ist ein anderer Computer: Kreuzen Sie oben das Kästchen an, bevor Fotos dorthin gesendet werden."
+  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} ist ein anderer Computer: Kreuzen Sie oben das Kästchen an, bevor Fotos dorthin gesendet werden.",
+  " · {n} skipped": " · {n} übersprungen",
+  "Level {level}": "Stufe {level}",
+  "PDQ: {bits} of 256 bits apart": "PDQ: {bits} von 256 Bit verschieden",
+  "Ready · signed as {key}": "Bereit · signiert als {key}",
+  "Saved the VER Record as {path}": "VER-Record gespeichert als {path}",
+  "Selected {n} matching photos": "{n} passende Fotos ausgewählt",
+  "The photo's file could not be read: {e}": "Die Datei des Fotos konnte nicht gelesen werden: {e}",
+  "The search-by-meaning model did not work: {e}": "Das Modell für die Suche nach Bedeutung hat nicht funktioniert: {e}",
+  "The signing key can't be used: {e}": "Der Signaturschlüssel kann nicht verwendet werden: {e}",
+  "VER: {n} of {total} files got no Record: {reason}": "VER: {n} von {total} Dateien haben keinen Record bekommen: {reason}",
+  "Writing VER Records for {n} photos…": "VER-Records für {n} Fotos werden geschrieben…",
+  "Wrote VER Records for {written} of {total} photos to {dir}": "VER-Records für {written} von {total} Fotos nach {dir} geschrieben",
+  "by meaning: cosine {score:.3}": "nach Bedeutung: Kosinus {score:.3}",
+  "pHash: {bits} of 64 bits apart": "pHash: {bits} von 64 Bit verschieden",
+  "pixel-hashed {pixel} · provisional {provisional}": "mit Pixel-Hash {pixel} · vorläufig {provisional}",
+  "{n} photos are still being fingerprinted; matches may be incomplete": "{n} Fotos bekommen noch ihren Fingerabdruck; die Treffer sind womöglich unvollständig"
 }

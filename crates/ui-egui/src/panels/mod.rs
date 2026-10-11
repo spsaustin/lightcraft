@@ -31,6 +31,7 @@ pub mod settings;
 pub mod strip;
 pub mod topbar;
 pub mod unnamed;
+pub mod ver;
 pub mod vera;
 pub mod vera_settings;
 

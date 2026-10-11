@@ -54,7 +54,16 @@ pub fn body(app: &mut LightcraftApp, ui: &mut egui::Ui, tab: &mut String) {
         "performance" => performance_tab(app, ui, &t),
         "display" => display_tab(app, ui, &t),
         "interface" => interface_tab(app, ui, &t),
-        "search" => super::vera_settings::settings_tab(app, ui, &t),
+        "search" => {
+            // the longest tab (lanes, the model, Describe, VER Records): it scrolls rather than outgrow the window
+            let max = (ui.ctx().content_rect().height() - 170.0).max(320.0);
+            egui::ScrollArea::vertical()
+                .id_salt("settingsSearch")
+                .max_height(max)
+                .min_scrolled_height(max)
+                .auto_shrink([false, true])
+                .show(ui, |ui| super::vera_settings::settings_tab(app, ui, &t));
+        }
         "faces" => super::faces::settings_tab(app, ui, &t),
         "denoise" => super::denoise::settings_tab(app, ui, &t),
         _ => general_tab(app, ui, &t),

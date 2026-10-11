@@ -265,5 +265,21 @@
   "Written by {model}": "Написано {model}",
   "{who}, accepted {when}": "{who}, прийнято {when}",
   "Error: {e}": "Помилка: {e}",
-  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} — інший комп’ютер: позначте поле вище, щоб погодитися, перш ніж фото буде туди надіслано."
+  "{host} is another computer: tick the box above to agree before photos are sent there.": "{host} — інший комп’ютер: позначте поле вище, щоб погодитися, перш ніж фото буде туди надіслано.",
+  " · {n} skipped": " · пропущено: {n}",
+  "Level {level}": "Рівень {level}",
+  "PDQ: {bits} of 256 bits apart": "PDQ: різниця {bits} з 256 біт",
+  "Ready · signed as {key}": "Готово · підпис {key}",
+  "Saved the VER Record as {path}": "Запис VER збережено: {path}",
+  "Selected {n} matching photos": "Вибрано збіжних фото: {n}",
+  "The photo's file could not be read: {e}": "Не вдалося прочитати файл фото: {e}",
+  "The search-by-meaning model did not work: {e}": "Модель пошуку за змістом не спрацювала: {e}",
+  "The signing key can't be used: {e}": "Ключ підпису не можна використати: {e}",
+  "VER: {n} of {total} files got no Record: {reason}": "VER: файлів без запису — {n} з {total}: {reason}",
+  "Writing VER Records for {n} photos…": "Запис VER для фото: {n}…",
+  "Wrote VER Records for {written} of {total} photos to {dir}": "Записи VER для {written} з {total} фото записано в {dir}",
+  "by meaning: cosine {score:.3}": "за змістом: косинус {score:.3}",
+  "pHash: {bits} of 64 bits apart": "pHash: різниця {bits} з 64 біт",
+  "pixel-hashed {pixel} · provisional {provisional}": "з хешем пікселів {pixel} · попередні {provisional}",
+  "{n} photos are still being fingerprinted; matches may be incomplete": "Відбитки ще обчислюються для фото: {n}; збіги можуть бути неповними"
 }

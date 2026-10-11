@@ -32,6 +32,9 @@ pub fn pump(app: &mut LightcraftApp, ctx: &egui::Context) {
     // Describe: photos waiting for a worker or in flight, and the proposals waiting for review
     let d = &v["describe"];
     let describe = (d["pending"].as_u64().unwrap_or(0), d["inFlight"].as_u64().unwrap_or(0), d["proposals"].as_u64().unwrap_or(0));
+    // VER Records written in the background (Show VER Record…, Write VER Records…)
+    let ver_pending = v["ver"]["pending"].as_u64().unwrap_or(0);
+    super::ver::pumped(app, ctx, &v["ver"]);
     let was_busy = app.caches.vera_describe.0 + app.caches.vera_describe.1 > 0;
     app.caches.vera_describe = describe;
     if was_busy && describe.0 + describe.1 == 0 {
@@ -39,7 +42,13 @@ pub fn pump(app: &mut LightcraftApp, ctx: &egui::Context) {
     }
     // as for the face scan: called again in 50 ms while there is work, looked at again every few seconds once it is
     // done (new photos are fingerprinted soon after they arrive), and nothing asked for while the library is empty
-    let work = app.caches.vera_pending.saturating_add(app.caches.vera_embedding.0).saturating_add(describe.0).saturating_add(describe.1);
+    let work = app
+        .caches
+        .vera_pending
+        .saturating_add(app.caches.vera_embedding.0)
+        .saturating_add(describe.0)
+        .saturating_add(describe.1)
+        .saturating_add(ver_pending);
     let (next, wait) = schedule(work, photos);
     app.caches.vera_next_pump = now + next;
     if let Some(secs) = wait {
@@ -120,17 +129,41 @@ pub fn show_duplicates(app: &mut LightcraftApp, ctx: &egui::Context, id: Option<
         }
         return Ok(r);
     }
-    note_duplicates(app, &name, sort);
+    let tiers = r["photos"].as_array().into_iter().flatten().filter_map(|p| Some((p["id"].as_u64()?, p["tier"].as_str()?.to_string()))).collect();
+    note_duplicates(app, &name, sort, tiers);
     if !matches!(app.ui.view, ViewMode::PhotoGrid | ViewMode::SquareGrid) {
         app.ui.view = ViewMode::PhotoGrid;
     }
     Ok(r)
 }
 
-/// Remember that the filter's `only` list now holds `name`'s duplicates (it was just set by `photo.duplicates`).
-pub(crate) fn note_duplicates(app: &mut LightcraftApp, name: &str, sort: Option<Sort>) {
+/// Remember that the filter's `only` list now holds `name`'s duplicates (it was just set by `photo.duplicates`), each
+/// with its tier.
+pub(crate) fn note_duplicates(app: &mut LightcraftApp, name: &str, sort: Option<Sort>, tiers: Vec<(u64, String)>) {
     let ids = app.session.filter.only.clone();
-    app.ui.only_origin = Some(OnlyOrigin { kind: OnlyKind::Duplicates { name: name.to_string() }, ids, sort });
+    app.ui.only_origin = Some(OnlyOrigin { kind: OnlyKind::Duplicates { name: name.to_string(), tiers }, ids, sort });
+}
+
+/// What a duplicate's cell calls its tier, in `photo.duplicates`'s order: the same bytes, the same rendered pixels (one
+/// CPNP-1 Canonical Buffer: a grouping of renditions, never an identity), then the fingerprint tiers and the vector
+/// lane's.
+pub(crate) fn tier_label(tier: &str) -> Option<&'static str> {
+    match tier {
+        "bytes" => Some("Same file"),
+        "pixels" => Some("Same pixels"),
+        "picture" => Some("Same picture"),
+        "possible" => Some("Possibly the same"),
+        "similar" => Some("Looks similar"),
+        _ => None,
+    }
+}
+
+/// The tier of photo `id` in the duplicates the grid shows (none for the photo they are duplicates of, or when the grid
+/// shows something else).
+pub(crate) fn duplicate_tier(app: &LightcraftApp, id: PhotoId) -> Option<&str> {
+    let origin = app.ui.only_origin.as_ref().filter(|o| o.ids == app.session.filter.only)?;
+    let OnlyKind::Duplicates { tiers, .. } = &origin.kind else { return None };
+    tiers.iter().find(|(t, _)| *t == id.0).map(|(_, tier)| tier.as_str())
 }
 
 /// The toast when a photo has no duplicates (yet: some photos may not have their fingerprints; and crops are found
@@ -271,7 +304,7 @@ pub fn only_label(app: &LightcraftApp) -> Option<String> {
     Some(match &origin.kind {
         OnlyKind::Ranked { query, meaning: false } => crate::i18n::tr_format!("Ranked: “{query}”", query = query),
         OnlyKind::Ranked { query, meaning: true } => crate::i18n::tr_format!("Ranked: “{query}” · by words and meaning", query = query),
-        OnlyKind::Duplicates { name } => crate::i18n::tr_format!("Duplicates of {name}", name = name),
+        OnlyKind::Duplicates { name, .. } => crate::i18n::tr_format!("Duplicates of {name}", name = name),
         OnlyKind::LooksLike { name } => crate::i18n::tr_format!("Looks like {name}", name = name),
     })
 }

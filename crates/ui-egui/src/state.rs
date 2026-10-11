@@ -532,8 +532,9 @@ pub struct OnlyOrigin {
 pub enum OnlyKind {
     /// `search.text`: the results of this query, best first; `meaning` when the vector lane ranked them too.
     Ranked { query: String, meaning: bool },
-    /// `photo.duplicates`: the photo (by file name) and the photos that are the same picture.
-    Duplicates { name: String },
+    /// `photo.duplicates`: the photo (by file name) and the photos that are the same picture, each with its tier
+    /// (`bytes`, `pixels`, `picture`, `possible`, `similar`), which its cell names.
+    Duplicates { name: String, tiers: Vec<(u64, String)> },
     /// `photo.similar`: the photo (by file name) and the pictures that look like it, best first.
     LooksLike { name: String },
 }
@@ -772,6 +773,10 @@ pub enum Dialog {
         preset_name: String,
         limit_kb: u32,
         dir: String,
+        /// "Write VER Records" for this export (`None`: as Settings ▸ Search ▸ VER Records says, read when the dialog
+        /// first draws).
+        #[serde(default)]
+        ver_records: Option<bool>,
     },
     /// Photo Merge (HDR / Panorama / HDR Panorama) options; the preview lives in the app.
     Merge {
@@ -804,6 +809,24 @@ pub enum Dialog {
     ReviewDescriptions {
         #[serde(default)]
         review: DescribeReview,
+    },
+    /// Photo ▸ Show VER Record… (`panels::ver`): the photo's Record, or why it has none. What it shows is kept in
+    /// `Caches::ver` (a Record can be megabytes; the dialog is copied every frame).
+    VerRecord {
+        photo: u64,
+    },
+    /// File ▸ Read VER Record… (`panels::ver`): what `ver.import` said about a Record file (`result`), or why it could
+    /// not be read (`error`).
+    VerImport {
+        file: String,
+        #[serde(default)]
+        result: serde_json::Value,
+        #[serde(default)]
+        error: Option<String>,
+    },
+    /// The photos the last Write VER Records… skipped: (file name, reason).
+    VerSkipped {
+        rows: Vec<(String, String)>,
     },
     /// Confirm moving photos to Recently Deleted.
     ConfirmDelete {

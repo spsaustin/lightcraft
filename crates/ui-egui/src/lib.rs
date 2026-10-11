@@ -89,6 +89,8 @@ mod tests_titlebar;
 #[cfg(test)]
 mod tests_unsaved;
 #[cfg(test)]
+mod tests_ver;
+#[cfg(test)]
 mod tests_vera;
 #[cfg(test)]
 mod tests_vera_describe;
@@ -1258,6 +1260,8 @@ pub struct Caches {
     pub vera_warning: Option<String>,
     /// The Describe lane as the pump last reported it: (waiting, in flight, proposals to review).
     pub vera_describe: (u64, u64, u64),
+    /// VER Records: Show VER Record's request and what it shows, a Write VER Records in flight (`panels::ver`).
+    pub ver: panels::ver::State,
     person_names: Option<(u64, std::sync::Arc<Vec<String>>)>,
     /// The grid's date runs, layout and indexes (by the visible list's generation).
     pub grid: panels::grid::GridCache,
