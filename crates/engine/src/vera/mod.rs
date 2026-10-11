@@ -2,7 +2,9 @@
 //!
 //! The algorithms live in `lightcraft-vera` (pure functions, no I/O); this module decides what to digest and when, where
 //! the results are kept and how the commands see them (`docs/vera.md`):
-//! - [`digests`]: one PDQ + pHash digest per picture, keyed by content, cached in `vera-digests.bin` beside the library.
+//! - [`digests`]: one fingerprint per picture (PDQ + pHash over the CPNP-1 Canonical Buffer, with the VER `pixel_hash`
+//!   and `content_hash`; provisional thumbnail-level digests for a file without a CPNP-1 path), keyed by content,
+//!   cached in `vera-digests.bin` beside the library; made off the session thread by [`fingerprint`].
 //! - [`sidecar`]: where that file and the others below live: the library folder on disk, or the library's own file
 //!   store (the browser's storage); memory only without a library.
 //! - The keyword index, built from the catalog when a search needs it and rebuilt when the catalog has changed since.
@@ -21,6 +23,7 @@ pub(crate) mod commands;
 pub(crate) mod describe;
 pub(crate) mod digests;
 pub(crate) mod embeddings;
+pub(crate) mod fingerprint;
 pub(crate) mod keywords;
 pub(crate) mod lane;
 pub(crate) mod model;
@@ -39,7 +42,7 @@ use std::time::Duration;
 
 use lightcraft_catalog::{MediaKind, Photo, PhotoId};
 use lightcraft_raster::Rgb32f;
-use lightcraft_vera::{Digest, Index, Luma, Sameness};
+use lightcraft_vera::{Digest, Index, Sameness};
 use serde_json::{Value, json};
 use web_time::Instant;
 
@@ -47,6 +50,7 @@ use crate::Session;
 use crate::activity::{Cancel, TaskGuard};
 use crate::import::{ImportCandidate, NearDuplicate};
 use crate::media::{SourceLevel, content_key};
+use digests::Fingerprint;
 use sidecar::{Loaded, Sidecars};
 
 /// The user's "not the same picture" decisions, in the library folder.
@@ -145,7 +149,7 @@ impl Pace {
     }
 
     /// Pictures digested per call at this pace.
-    fn per_call(self) -> usize {
+    pub(crate) fn per_call(self) -> usize {
         match self {
             Pace::Pause => 0,
             Pace::Light => 1,
@@ -189,6 +193,10 @@ pub(crate) struct State {
     digested_known: usize,
     /// Import candidates' digests, by (path, file size).
     pub candidates: HashMap<(String, u64), Digest>,
+    /// The fingerprinting thread (started on first need) and the pictures handed to it, with how many photos show each.
+    #[cfg(not(target_arch = "wasm32"))]
+    worker: Option<fingerprint::Worker>,
+    in_flight: HashMap<String, usize>,
     /// The vector lane: the model, the library's embeddings, their pump.
     pub lane: lane::Lane,
     /// The Describe lane: its queue, its worker threads, the review queue.
@@ -239,39 +247,51 @@ pub(crate) fn ensure_open(s: &mut Session) {
     s.vera.opened = Some(files);
 }
 
-/// Both digests of a decoded picture, from its Rec. 601 luma; `None` for a picture too small to fingerprint.
+/// Provisional digests of a decoded picture ([`fingerprint::digest_linear`]); `None` for a picture too small to
+/// fingerprint.
 pub(crate) fn digest_image(img: &Rgb32f) -> Option<Digest> {
-    let luma = lightcraft_vera::digest::luma_from_rgb(img.width, img.height, &img.data);
-    let plane = Luma::new(img.width, img.height, &luma)?;
-    lightcraft_vera::digest(&plane)
+    fingerprint::digest_linear(img)
 }
 
-/// Digest photo `id` from its thumbnail-level source. The source is read without being put in the session's source
-/// cache: a pass over the whole library would push out the sources the user is working with.
-pub(crate) fn digest_photo(s: &mut Session, id: PhotoId) -> Result<Digest, String> {
-    let Some(p) = s.catalog.photo(id) else { return Err("no such photo".into()) };
-    let source = s.media.source_ref(p, SourceLevel::Thumb);
-    let img = source.load()?;
-    digest_image(&img).ok_or_else(|| "too small to fingerprint".into())
+/// What photo `id`'s picture is fingerprinted from: its file, and its thumbnail-level source (read without being put in
+/// the session's source cache: a pass over the whole library would push out the sources the user is working with).
+fn input_of(s: &mut Session, id: PhotoId) -> Option<fingerprint::Input> {
+    let p = s.catalog.photo(id)?.clone();
+    let path = match &p.source {
+        lightcraft_catalog::Source::File { path } => Some(path.clone()),
+        lightcraft_catalog::Source::Demo { .. } => None,
+    };
+    Some(fingerprint::Input { path, read: s.media.file_bytes.clone(), thumb: s.media.source_ref(&p, SourceLevel::Thumb) })
 }
 
-/// Digest photo `id` now unless its picture already has a digest; remembered under its content key. A picture whose
+/// Fingerprint photo `id` now, on this thread ([`fingerprint::make`]).
+pub(crate) fn digest_photo(s: &mut Session, id: PhotoId) -> Result<Fingerprint, String> {
+    let input = input_of(s, id).ok_or("no such photo")?;
+    fingerprint::make(&input)
+}
+
+/// Fingerprint photo `id` now unless its picture already has one; remembered under its content key. A picture whose
 /// source fails is remembered as skipped (the error is returned).
-pub(crate) fn digest_now(s: &mut Session, id: PhotoId) -> Result<Option<Digest>, String> {
+pub(crate) fn fingerprint_now(s: &mut Session, id: PhotoId) -> Result<Option<Fingerprint>, String> {
     let key = s.catalog.photo(id).map(|p| content_key(p)).ok_or("no such photo")?;
-    if let Some(d) = s.vera.digests.get(&key) {
-        return Ok(Some(*d));
+    if let Some(f) = s.vera.digests.fingerprint(&key) {
+        return Ok(Some(*f));
     }
     match digest_photo(s, id) {
-        Ok(d) => {
-            s.vera.digests.insert(key, d);
-            Ok(Some(d))
+        Ok(f) => {
+            s.vera.digests.insert_fingerprint(key, f);
+            Ok(Some(f))
         }
         Err(e) => {
             s.vera.skipped.insert(key);
             Err(e)
         }
     }
+}
+
+/// [`fingerprint_now`]'s digests.
+pub(crate) fn digest_now(s: &mut Session, id: PhotoId) -> Result<Option<Digest>, String> {
+    fingerprint_now(s, id).map(|f| f.map(|f| f.digest))
 }
 
 /// Look through the catalog for pictures without a digest (newest photos first).
@@ -283,7 +303,7 @@ fn refresh_queue(s: &mut Session) {
         let key = content_key(p);
         if s.vera.digests.contains(&key) {
             digested += 1;
-        } else if !s.vera.skipped.contains(&key) {
+        } else if !s.vera.skipped.contains(&key) && !s.vera.in_flight.contains_key(&key) {
             by_key.entry(key).or_default().push(p.id);
         }
     }
@@ -326,68 +346,119 @@ fn save_if_due(s: &mut Session, pending: usize) {
     }
 }
 
-/// One call of `vera.pump`: digest up to the pace's number of pictures, keep the activity row and the cache file up to
-/// date, and say how far the library is.
+/// Take in what the fingerprinting thread has finished.
+#[cfg(not(target_arch = "wasm32"))]
+fn collect(s: &mut Session) {
+    let finished = s.vera.worker.as_ref().map(fingerprint::Worker::finished).unwrap_or_default();
+    for d in finished {
+        s.vera.in_flight.remove(&d.key);
+        match d.result {
+            Ok(f) => {
+                s.vera.digests.insert_fingerprint(d.key, f);
+                s.vera.digested_known = s.vera.digested_known.saturating_add(d.photos);
+            }
+            Err(e) => {
+                log::debug!("vera: picture {}: {e}", d.key);
+                s.vera.skipped.insert(d.key);
+            }
+        }
+    }
+}
+
+/// Fingerprint one pending picture: on the worker when it has a file (a full-size decode), here otherwise (a demo
+/// scene, the browser). `false` when the worker could not take it (it is queued again).
+fn start(s: &mut Session, next: Pending) -> bool {
+    let inputs: Vec<(PhotoId, fingerprint::Input)> = next.ids.iter().filter_map(|id| input_of(s, *id).map(|i| (*id, i))).collect();
+    #[cfg(not(target_arch = "wasm32"))]
+    if inputs.iter().any(|(_, i)| i.path.is_some()) {
+        if s.vera.worker.is_none() {
+            s.vera.worker = fingerprint::Worker::start();
+        }
+        let job = fingerprint::Job { key: next.key.clone(), photos: next.ids.len(), inputs };
+        if s.vera.worker.as_ref().is_some_and(|w| w.submit(job)) {
+            s.vera.in_flight.insert(next.key, next.ids.len());
+            return true;
+        }
+        // the thread is gone: start another on the next call
+        s.vera.worker = None;
+        s.vera.queue.push(next);
+        return false;
+    }
+    let mut done = None;
+    for (id, input) in &inputs {
+        match fingerprint::make(input) {
+            Ok(f) => {
+                done = Some(f);
+                break;
+            }
+            Err(e) => log::debug!("vera: photo {}: {e}", id.0),
+        }
+    }
+    match done {
+        Some(f) => {
+            s.vera.digests.insert_fingerprint(next.key, f);
+            s.vera.digested_known = s.vera.digested_known.saturating_add(next.ids.len());
+        }
+        None => {
+            s.vera.skipped.insert(next.key);
+        }
+    }
+    true
+}
+
+/// One call of `vera.pump`: fingerprint up to the pace's number of pictures, keep the activity row and the cache file
+/// up to date, and say how far the library is.
 pub(crate) fn pump(s: &mut Session, pace: Pace) -> Value {
     ensure_open(s);
+    #[cfg(not(target_arch = "wasm32"))]
+    collect(s);
     let per_call = pace.per_call();
     if per_call > 0 {
         let stale = s.vera.queue_stamp != Some(s.catalog.revision);
-        if s.vera.queue.is_empty() && stale && s.vera.queued_at.is_none_or(|t| t.elapsed() >= REQUEUE_EVERY) {
+        if s.vera.queue.is_empty() && s.vera.in_flight.is_empty() && stale && s.vera.queued_at.is_none_or(|t| t.elapsed() >= REQUEUE_EVERY) {
             refresh_queue(s);
         }
         let mut step = Step::new(per_call, step_budget(), Instant::now());
-        while step.may_start(Instant::now()) {
+        while step.may_start(Instant::now()) && s.vera.in_flight.len() < fingerprint::MAX_IN_FLIGHT {
             let Some(next) = s.vera.queue.pop() else { break };
             s.vera.pending_known = s.vera.pending_known.saturating_sub(next.ids.len());
-            // digested since the look (`vera.digest`, `photo.duplicates`), or failed: nothing to do
+            // fingerprinted since the look (`vera.digest`, `photo.duplicates`), or failed: nothing to do
             if s.vera.digests.contains(&next.key) {
                 s.vera.digested_known = s.vera.digested_known.saturating_add(next.ids.len());
                 continue;
             }
-            if s.vera.skipped.contains(&next.key) {
+            if s.vera.skipped.contains(&next.key) || s.vera.in_flight.contains_key(&next.key) {
                 continue;
             }
             step.started_one();
-            let mut done = None;
-            for id in &next.ids {
-                match digest_photo(s, *id) {
-                    Ok(d) => {
-                        done = Some(d);
-                        break;
-                    }
-                    Err(e) => log::debug!("vera: photo {}: {e}", id.0),
-                }
-            }
-            match done {
-                Some(d) => {
-                    s.vera.digests.insert(next.key, d);
-                    s.vera.digested_known = s.vera.digested_known.saturating_add(next.ids.len());
-                }
-                None => {
-                    s.vera.skipped.insert(next.key);
-                }
+            let n = next.ids.len();
+            if !start(s, next) {
+                s.vera.pending_known = s.vera.pending_known.saturating_add(n);
+                break;
             }
         }
-        track(s, s.vera.pending_known);
-    } else if s.vera.pending_known == 0 {
-        track(s, 0);
     }
-    let pending = s.vera.pending_known;
+    let pending = s.vera.pending_known.saturating_add(s.vera.in_flight.values().sum::<usize>());
+    if per_call > 0 || pending == 0 {
+        track(s, pending);
+    }
     save_if_due(s, pending);
     let embedding = lane::pump(s, pace);
     let embedding_active = embedding["pending"].as_u64().is_some_and(|n| n > 0);
     // describing runs whatever the pace once asked for (pause only holds back new requests)
     let describe = describe::pump(s, pace);
     let describe_active = describe["pending"].as_u64().is_some_and(|n| n > 0) || describe["inFlight"].as_u64().is_some_and(|n| n > 0);
+    let ver = crate::ver::export::pump(s, pace);
+    let ver_active = ver["pending"].as_u64().is_some_and(|n| n > 0);
     json!({
-        "active": pending > 0 || embedding_active || describe_active,
+        "active": pending > 0 || embedding_active || describe_active || ver_active,
         "pending": pending,
         "digested": s.vera.digested_known,
         "photos": s.vera.photos_known,
         "pace": pace.name(),
         "embedding": embedding,
         "describe": describe,
+        "ver": ver,
     })
 }
 

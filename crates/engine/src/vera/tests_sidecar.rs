@@ -41,14 +41,14 @@ fn digests_are_written_appended_reloaded_and_compacted_through_the_store() {
     // the first save writes the file whole (there was none), with its header
     assert_eq!((files.rewrites(digests::FILE_NAME), files.appends(digests::FILE_NAME)), (1, 0));
     let first = files.get(digests::FILE_NAME).unwrap();
-    assert!(first.starts_with(b"LCVD\x01"), "{first:?}");
+    assert!(first.starts_with(b"LCVD\x02"), "{first:?}");
     assert_eq!(st.file_len(), Some(first.len() as u64));
     // later ones append only the new records: never the whole file again
     st.insert("also".into(), d(3));
     st.save().unwrap();
     assert_eq!((files.rewrites(digests::FILE_NAME), files.appends(digests::FILE_NAME)), (1, 1));
     let second = files.get(digests::FILE_NAME).unwrap();
-    assert_eq!(second.len() - first.len(), 2 + 4 + 42, "one record appended");
+    assert_eq!(second.len() - first.len(), 2 + 4 + 43, "one record appended (a provisional one: no hashes)");
     assert_eq!(second.get(..first.len()), Some(&first[..]));
     drop(st);
     // a reload (a new page over the same storage) reads every record back, and appends again

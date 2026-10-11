@@ -84,12 +84,13 @@ fn sidecar_json(name: &str, files: &super::sidecar::Sidecars, bytes: Option<u64>
 /// `vera.status {}`: what VERA knows about this library, and which lanes run in this build.
 fn status(s: &mut Session, _: &Value) -> Result<Value> {
     ensure_open(s);
-    let (mut photos, mut digested, mut skipped) = (0usize, 0usize, 0usize);
+    let (mut photos, mut digested, mut skipped, mut pixel_hashed) = (0usize, 0usize, 0usize, 0usize);
     for p in s.catalog.photos().filter(|p| eligible(p)) {
         photos += 1;
         let key = content_key(p);
-        if s.vera.digests.contains(&key) {
+        if let Some(f) = s.vera.digests.fingerprint(&key) {
             digested += 1;
+            pixel_hashed += usize::from(!f.is_provisional());
         } else if s.vera.skipped.contains(&key) {
             skipped += 1;
         }
@@ -113,6 +114,10 @@ fn status(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({
         "digested": digested,
         "photos": photos,
+        // fingerprinted over the CPNP-1 Canonical Buffer, with a VER pixel_hash; the rest are provisional (no CPNP-1
+        // path: raws, demo scenes, the browser build)
+        "pixelHashed": pixel_hashed,
+        "provisional": digested.saturating_sub(pixel_hashed),
         "pendingDigests": photos.saturating_sub(digested).saturating_sub(skipped),
         "unreadable": skipped,
         "digests": s.vera.digests.len(),
@@ -355,9 +360,10 @@ fn similar(s: &mut Session, p: &Value) -> Result<Value> {
 fn tier_rank(tier: &str) -> u8 {
     match tier {
         "bytes" => 0,
-        "picture" => 1,
-        "possible" => 2,
-        _ => 3,
+        "pixels" => 1,
+        "picture" => 2,
+        "possible" => 3,
+        _ => 4,
     }
 }
 
@@ -379,7 +385,8 @@ fn duplicates(s: &mut Session, p: &Value) -> Result<Value> {
     let me = s.catalog.photo(id).cloned().ok_or_else(|| bad(C, "no such photo"))?;
     let my_key = content_key(&me);
     // the photo's own digest is made now when the pump has not got to it yet; its vector too, when the lane runs
-    let mine = if s.vera.skipped.contains(&my_key) { None } else { digest_now(s, id).ok().flatten() };
+    let my_fp = if s.vera.skipped.contains(&my_key) { None } else { super::fingerprint_now(s, id).ok().flatten() };
+    let mine = my_fp.map(|f| f.digest);
     let my_vec = lane::vector_of(s, id, true).ok().flatten();
     let (mut rows, mut ignored, mut pending, mut pending_vec): (Vec<DupRow>, usize, usize, usize) = (Vec::new(), 0, 0, 0);
     for q in s.catalog.photos().filter(|q| eligible(q) && q.id != id) {
@@ -388,10 +395,16 @@ fn duplicates(s: &mut Session, p: &Value) -> Result<Value> {
             continue;
         }
         let key = content_key(q);
-        let theirs = s.vera.digests.get(&key).copied();
+        let their_fp = s.vera.digests.fingerprint(&key).copied();
+        let theirs = their_fp.map(|f| f.digest);
         let distances = mine.zip(theirs).map(|(a, b)| lightcraft_vera::digest::distances(&a, &b));
+        // the same rendered pixels (one Canonical Buffer, VER pixel_hash): a grouping of renditions, never an identity
+        // (errata E27)
+        let same_pixels = matches!((my_fp.and_then(|f| f.pixel), their_fp.and_then(|f| f.pixel)), (Some(a), Some(b)) if a == b);
         let found = if me.content_hash.is_some() && q.content_hash == me.content_hash {
             Some(("bytes", Some((0, 0)), None))
+        } else if same_pixels {
+            Some(("pixels", distances, None))
         } else {
             let by_digest = match (mine, theirs) {
                 (Some(a), Some(b)) => match lightcraft_vera::sameness(&a, &b) {
@@ -530,7 +543,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Search Status",
             [],
             None,
-            "{} → {digested, photos, pendingDigests, unreadable, digests, embedded, pendingEmbeddings, unembeddable, embeddings, model: {id, installed, loaded, memoryBytes}, indexDocs, ignoredPairs, lanes: {keyword: \"live\", digest: \"live\", vector: {state: live | needs_model | downloading | disabled_by_user | needs_desktop | error, reason}, describe: {state: live | needs_endpoint | needs_token | needs_desktop | error, reason, host?, pending, proposals}}, sidecar: {path?, bytes?}, sidecars: [{name, path? | store?, bytes?}]} — how far fingerprinting and embedding have got, and which search lanes this build runs (with a sentence for each)",
+            "{} → {digested, photos, pixelHashed, provisional, pendingDigests, unreadable, digests, embedded, pendingEmbeddings, unembeddable, embeddings, model: {id, installed, loaded, memoryBytes}, indexDocs, ignoredPairs, lanes: {keyword: \"live\", digest: \"live\", vector: {state: live | needs_model | downloading | disabled_by_user | needs_desktop | error, reason}, describe: {state: live | needs_endpoint | needs_token | needs_desktop | error, reason, host?, pending, proposals}}, sidecar: {path?, bytes?}, sidecars: [{name, path? | store?, bytes?}]} — how far fingerprinting and embedding have got, and which search lanes this build runs (with a sentence for each)",
             always,
             status
         ),
@@ -539,7 +552,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fingerprint Photos in the Background",
             [],
             None,
-            "{pace?: pause | light | normal | full (normal)} → {active, pending, digested, photos, pace, embedding: {state, pending, embedded, photos, inFlight}, describe: {pending, inFlight, proposals}} — cheap to call every frame: digests the next photos without a fingerprint (none when paused, 1 when light, 2 when normal, 4 when full) and, when the vector lane runs, hands as many photos without an embedding to the embedding thread; keeps the \"Fingerprinting photos\" and \"Embedding photos\" activity rows while there is work and saves both beside the library every few seconds",
+            "{pace?: pause | light | normal | full (normal)} → {active, pending, digested, photos, pace, embedding: {state, pending, embedded, photos, inFlight}, describe: {pending, inFlight, proposals}, ver: {pending, written, failed}} — cheap to call every frame: hands the next photos without a fingerprint to the fingerprinting thread (full-size CPNP-1 Canonical Buffer; a demo scene is digested on the spot) — none when paused, 1 when light, 2 when normal, 4 when full, at most 2 out at once — and, when the vector lane runs, hands as many photos without an embedding to the embedding thread; keeps the \"Fingerprinting photos\" and \"Embedding photos\" activity rows while there is work and saves both beside the library every few seconds",
             always,
             pump
         ),
@@ -548,7 +561,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fingerprint Photos",
             [],
             None,
-            "{ids?: [photo ids] (the selection)} → {digested, already, failed: [{id, error}]} — fingerprint these photos now (PDQ + pHash from the thumbnail-level picture), at most 10000",
+            "{ids?: [photo ids] (the selection)} → {digested, already, failed: [{id, error}]} — fingerprint these photos now, at most 10000: PDQ + pHash and the VER pixel_hash over the full-size CPNP-1 Canonical Buffer for a file with a CPNP-1 path; provisional PDQ + pHash from the thumbnail-level picture otherwise (a raw, a demo scene)",
             always,
             digest
         ),
@@ -566,7 +579,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Find Duplicates",
             [],
             None,
-            "{id?: photo (the active one), limit?: 1..10000 (50), filter?: bool (false)} → {id, photos: [{id, tier: bytes | picture | possible | similar, pdq, phash, lane?: \"vector\", cosine?, strong?}], ignored, digested, pendingDigests, embedded, pendingEmbeddings} — other photos that are the same picture: the same bytes, the same picture by fingerprint (a resize, a re-export), possibly the same (a variant edit, a burst neighbour), or, by the vector lane where the fingerprints do not match, similar (a crop, a heavier edit: cosine at or over the near-duplicate bar, `strong` at or over the duplicate bar); `pdq` / `phash` are the bits that differ (of 256 / 64; null without both fingerprints). Virtual copies and pairs set apart with photo.ignorePair are left out. With `filter`, the view shows the photo and its duplicates",
+            "{id?: photo (the active one), limit?: 1..10000 (50), filter?: bool (false)} → {id, photos: [{id, tier: bytes | pixels | picture | possible | similar, pdq, phash, lane?: \"vector\", cosine?, strong?}], ignored, digested, pendingDigests, embedded, pendingEmbeddings} — other photos that are the same picture: the same bytes, the same rendered pixels (one CPNP-1 Canonical Buffer: equal VER pixel_hash, a grouping and never an identity), the same picture by fingerprint (a resize, a re-export), possibly the same (a variant edit, a burst neighbour), or, by the vector lane where the fingerprints do not match, similar (a crop, a heavier edit: cosine at or over the near-duplicate bar, `strong` at or over the duplicate bar); `pdq` / `phash` are the bits that differ (of 256 / 64; null without both fingerprints). Virtual copies and pairs set apart with photo.ignorePair are left out. With `filter`, the view shows the photo and its duplicates",
             always,
             duplicates
         ),

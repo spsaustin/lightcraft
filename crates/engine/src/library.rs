@@ -170,6 +170,10 @@ struct PrefsFile {
     /// Search (`vera.config`): whether the vector lane runs for this library; Describe's endpoint
     /// (`vera.describe.config`, never its token).
     vera: crate::vera::Prefs,
+    /// VER Records (`ver.config`): the authority, export sidecars, the signing key's path, the default schema and
+    /// the producer id.
+    #[serde(skip_serializing_if = "crate::ver::Prefs::is_default")]
+    ver: crate::ver::Prefs,
 }
 
 fn presets_json(s: &Session) -> String {
@@ -358,6 +362,7 @@ impl Session {
         self.smart_previews_dir = prefs.smart_previews_dir.filter(|_| on_disk).map(PathBuf::from);
         self.vera.lane.vector_lane = prefs.vera.vector_lane;
         self.vera.describe.prefs = prefs.vera.describe;
+        self.ver.library_changed(prefs.ver);
         if let Some(d) = &self.smart_previews_dir {
             self.media.smart_dir = Some(d.clone());
         }
@@ -602,6 +607,7 @@ impl Session {
             smart_previews_dir: self.smart_previews_dir.as_ref().map(|d| d.to_string_lossy().to_string()),
             forget_local_days: Some(self.forget_local_days),
             vera: crate::vera::Prefs { vector_lane: self.vera.lane.vector_lane, describe: self.vera.describe.prefs.clone() },
+            ver: self.ver.prefs.clone(),
         })
         .unwrap_or_default();
         let Some(lib) = self.library.as_mut() else { return Ok(()) };

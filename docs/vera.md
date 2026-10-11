@@ -47,11 +47,20 @@ grow). It is not saved: it is cheaper to build than to read back.
 
 ### The digest lane
 
-Each picture gets two fingerprints from its thumbnail-level picture (at most 512 pixels, turned into Rec. 601 luma):
-**PDQ** (256 bits, with a 0–100 quality figure that says how much detail survived) and **pHash** (64 bits). Two
-pictures are compared by how many bits differ:
+The digest lane is VER ([ver.md](ver.md)): a picture whose file has a CPNP-1 path (JPEG, PNG, WebP, TIFF and the
+other formats VER 1.0 §4 covers) is fingerprinted over its **full-size CPNP-1 Canonical Buffer**
+(`lightcraft_ver::hashing::identity`): **PDQ** (256 bits) and **pHash** (64 bits) over the Canonical Buffer (errata
+E22), its VER **`pixel_hash`** (SHA-256 of the Canonical Buffer: the same rendered pixels, a grouping and never an
+identity, E27) and its VER **`content_hash`** (SHA-256 of the file). These are the values a VER Record of the file
+carries, so `ver.import` matches Records against them directly. PDQ's 0–100 quality figure (how much detail survived)
+is measured on a box-filtered copy at most 512 pixels long. A picture without a CPNP-1 path (a camera raw, a demo
+scene, any picture in the browser build, where a full-size decode would stall the page) keeps **provisional** digests
+from its thumbnail-level picture (at most 512 pixels, sRGB-encoded and turned into Rec. 601 luma, so they compare with
+the canonical ones) and no `pixel_hash`; a raw read from disk still gets its `content_hash`. Two pictures are compared
+by how many bits differ:
 
-- **the same picture**: PDQ within 31 bits (when both pictures have a quality of 50 or more), or pHash within 6. Resizes,
+- **the same picture**: PDQ within 31 bits (when both pictures have a quality of 50 or more), or pHash within 6 (when
+  both have any detail: quality 1 or more, since the reference pHash gives every flat frame one digest). Resizes,
   re-exports and format changes land here.
 - **possibly the same**: both within their loose bounds (PDQ 63, pHash 12): a variant edit, a heavy crop, a burst
   neighbour. Only ever shown, never acted on.
@@ -65,12 +74,17 @@ copy shares its original's fingerprint and a re-linked file keeps it.
 ## Fingerprinting in the background
 
 Every photo in the library (videos aside) is fingerprinted once, in the background, by `vera.pump`, which the app calls
-every frame. Each call is cheap: it digests at most a few pictures and returns.
+every frame. Each call is cheap: it hands at most a few pictures to the fingerprinting thread and returns; the
+full-size decode happens there, never on the frame (a demo scene, which has no file, is digested on the spot, and in
+the browser, which has no threads, the provisional digests are made in the call).
 
 - **Pace.** The app says how hard it may work, as for the face scan: `pause` does nothing but report (dragging, typing,
-  scrolling); `light` digests one picture per call; `normal` two; `full` four. In the browser the decode runs on the
-  main thread, so a call also stops starting pictures once it has worked 8 ms (`WEB_STEP_BUDGET`; the first picture of
-  a call always runs).
+  scrolling); `light` starts one picture per call; `normal` two; `full` four; at most two are out on the thread at once
+  (one being decoded, one waiting), so the lane holds one Canonical Buffer (3 bytes a pixel: 72 MB at 24 MP) and one
+  file at a time. In the browser the decode runs on the main thread, so a call also stops starting pictures once it
+  has worked 8 ms (`WEB_STEP_BUDGET`; the first picture of a call always runs).
+- **Cost.** A full-size canonicalisation costs more than the thumbnail-level decode it replaces; it runs on the
+  fingerprinting thread, so the frame does not pay it (*Measured cost*, below).
 - **Newest photos first**, so a fresh import is covered soonest. The catalog is looked through again for new photos at
   most once a second, and only once the current list is done.
 - **Unreadable pictures** (an offline original with no smart preview, a file that will not decode) are remembered for
@@ -80,10 +94,23 @@ every frame. Each call is cheap: it digests at most a few pictures and returns.
 - The pictures are read without being kept in the session's picture cache, so a pass over the library does not push
   out what you are working on.
 
+### Measured cost
+
+The demo library's 24 scenes written as full-size JPEGs (24 MP each, quality 90; `measure_canonical_lane_cost` in
+`crates/engine/src/ver/tests.rs`, run with `--ignored --nocapture`), on a 4-core Linux container, development profile
+(workspace crates at `opt-level` 1, dependencies at 2): **4.3 s a photo** canonically (181 ms per megapixel) against
+**107 ms** for the thumbnail-level provisional digests the lane made before. Of the 4.3 s: the CPNP-1 decode about
+1.0 s, PDQ over the full-size Canonical Buffer about 2.2 s, pHash 0.45 s, the `pixel_hash` SHA-256 over 72 MB 0.4 s,
+PDQ's quality figure 0.16 s, the file's SHA-256 under 10 ms. That is about 72 minutes per thousand 24 MP photos on the one
+fingerprinting thread, off the frame; a release build is several times faster. The PDQ pass at full resolution
+is the part worth optimising first.
+
 ## Duplicates
 
-`photo.duplicates` lists the photos that are the same picture as one photo, in three tiers: `bytes` (the same file
-content, by hash), `picture` (the same picture by fingerprint) and `possible`. Each row carries the PDQ and pHash
+`photo.duplicates` lists the photos that are the same picture as one photo, in tiers: `bytes` (the same file
+content, by hash), `pixels` (the same rendered pixels: one Canonical Buffer, equal VER `pixel_hash`; listed first after
+`bytes`, a grouping of renditions such as a file whose metadata was rewritten, never an identity), `picture` (the same
+picture by fingerprint) and `possible`. Each row carries the PDQ and pHash
 distances. Virtual copies are not duplicates and are left out. The photo's own fingerprint is made on the spot when the
 background pass has not got to it yet; other photos are compared once they have theirs (`pendingDigests` says how many
 have not).
@@ -520,12 +547,12 @@ there unchanged: `search.text`, `photo.duplicates`, `photo.ignorePair`, `vera.di
 
 | Command | Params → result |
 |---|---|
-| `vera.status` | `{}` → `{digested, photos, pendingDigests, unreadable, digests, embedded, pendingEmbeddings, unembeddable, embeddings, model: {id, installed, loaded, memoryBytes}, indexDocs, ignoredPairs, lanes: {keyword, digest, vector: {state, reason}, describe: {state: live\|needs_endpoint\|needs_token\|disabled\|error, reason, host?, pending, proposals}}, sidecar: {path?, bytes?}, sidecars: [{name, path?, bytes?}]}` |
-| `vera.pump` | `{pace?: pause\|light\|normal\|full}` → `{active, pending, digested, photos, pace, embedding: {state, pending, embedded, photos, inFlight}, describe: {pending, inFlight, proposals}}`; not journaled |
-| `vera.digest` | `{ids?}` (the selection) → `{digested, already, failed: [{id, error}]}`; fingerprint these photos now; not journaled |
+| `vera.status` | `{}` → `{digested, photos, pixelHashed, provisional, pendingDigests, unreadable, digests, embedded, pendingEmbeddings, unembeddable, embeddings, model: {id, installed, loaded, memoryBytes}, indexDocs, ignoredPairs, lanes: {keyword, digest, vector: {state, reason}, describe: {state: live\|needs_endpoint\|needs_token\|disabled\|error, reason, host?, pending, proposals}}, sidecar: {path?, bytes?}, sidecars: [{name, path?, bytes?}]}` |
+| `vera.pump` | `{pace?: pause\|light\|normal\|full}` → `{active, pending, digested, photos, pace, embedding: {state, pending, embedded, photos, inFlight}, describe: {pending, inFlight, proposals}, ver: {pending, written, failed}}`; not journaled |
+| `vera.digest` | `{ids?}` (the selection) → `{digested, already, failed: [{id, error}]}`; fingerprint these photos now, on the spot (full-size Canonical Buffer where there is a CPNP-1 path); not journaled |
 | `search.text` | `{query, limit?: 200, filter?: true}` → `{photos: [{id, score, lane: keyword\|vector\|both, cosine?, keywordScore?}], cutoff, lanes, filtered, warning?}`. Without the vector lane: `lanes: ["keyword"]`, `cutoff: null`, `score` the BM25 score (as in Phase 1); with it: `lanes: ["keyword", "vector"]`, `score` the fused one, `cutoff` the vector lane's ceiling. With `filter` the grid shows the results in rank order (sort key `relevance`); a search that finds nothing leaves the view alone |
 | `photo.similar` | `{id?, limit?: 50, filter?: true}` → `{id, photos: [{id, cosine, lane: "vector"}], cutoff, embedded, pendingEmbeddings, filtered, role: canonical\|fused}`; an error when the vector lane is not ready; queries with the photo's fused vector once a description was accepted |
-| `photo.duplicates` | `{id?, limit?: 50, filter?: false}` → `{id, photos: [{id, tier: bytes\|picture\|possible\|similar, pdq, phash, lane?, cosine?, strong?}], ignored, digested, pendingDigests, embedded, pendingEmbeddings}`; rows by tier, then cosine (similar) or PDQ distance |
+| `photo.duplicates` | `{id?, limit?: 50, filter?: false}` → `{id, photos: [{id, tier: bytes\|pixels\|picture\|possible\|similar, pdq, phash, lane?, cosine?, strong?}], ignored, digested, pendingDigests, embedded, pendingEmbeddings}`; rows by tier, then cosine (similar) or PDQ distance |
 | `vera.model.status` | `{}` → `{installed, dir?, downloading?: {done, total, file}, downloadError?, licence: {name, url, notice}, modelId, bytes, loaded, state}`; not journaled |
 | `vera.model.download` | `{acceptLicense: true}` → `{started, installed, downloading}`; an error naming the licence without `acceptLicense`; not journaled |
 | `vera.model.cancel` | `{}` → `{cancelled}`; not journaled |
@@ -557,10 +584,12 @@ All are rebuildable or small. They live where the library's own settings files (
 as before), in the library's file store otherwise (the browser: OPFS or IndexedDB, see [web.md](web.md)); a session
 without a library keeps them in memory only.
 
-- **`vera-digests.bin`**: the fingerprints. Little-endian: `"LCVD"`, version `1`, then records of `key_len u16`, the
-  content key (UTF-8), `pdq [u8; 32]`, `pdq_quality u8`, `phash u64`, `source u8`. `source` names what the fingerprint
-  was made from (`1`: thumbnail-level luma); a change of rendition bumps it, and records made from another one are
-  dropped. New records are appended (every three seconds while the pump works, and when it finishes). A file that is
+- **`vera-digests.bin`**: the fingerprints. Little-endian: `"LCVD"`, version `2`, the digest algorithm's version, then
+  records of `key_len u16`, the content key (UTF-8), `pdq [u8; 32]`, `pdq_quality u8`, `phash u64`, `source u8`,
+  `flags u8`, then `pixel_hash [u8; 32]` for a canonical record and `content_hash [u8; 32]` when `flags` bit 0 says so.
+  `source` names what the fingerprint was made from (`2`: the full-size CPNP-1 Canonical Buffer; `3`: provisional,
+  thumbnail-level sRGB luma); records of any other source are dropped, and a version 1 file (thumbnail-level digests in
+  linear light, before VER) is rebuilt. New records are appended (every three seconds while the pump works, and when it finishes). A file that is
   damaged, cut short, of another format or over 1 GiB is ignored and written again whole; when a library opens, records
   of photos no longer in its catalog are dropped and the file is rewritten without them.
 - **`vera-embeddings-siglip2-base-patch32-256.bin`**: the vector lane's embeddings, one per picture (format above, under

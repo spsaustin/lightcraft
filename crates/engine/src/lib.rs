@@ -57,6 +57,7 @@ pub mod segment;
 pub mod sidecar;
 pub mod smart;
 pub mod sync;
+pub mod ver;
 pub(crate) mod vera;
 mod view;
 pub mod walk;
@@ -193,6 +194,8 @@ pub struct Session {
     /// Search and same-picture detection (`docs/vera.md`): picture digests, the keyword index, ignored pairs, and the
     /// vector lane's model and embeddings.
     pub(crate) vera: vera::State,
+    /// VER Records (`docs/ver.md`): their settings, the last one produced, background `ver.export` work.
+    pub(crate) ver: ver::State,
     /// Where the host keeps VERA's SigLIP 2 model (`<models>/siglip2-base-patch32-256`; set by the app like
     /// [`segment::Segmenter::dir`]). `None`: the vector lane has nowhere to keep a model.
     pub vera_model_dir: Option<std::path::PathBuf>,
@@ -321,6 +324,7 @@ impl Session {
             #[cfg(not(target_arch = "wasm32"))]
             faces: Default::default(),
             vera: Default::default(),
+            ver: Default::default(),
             vera_model_dir: None,
             clipboard: None,
             meta_clipboard: None,

@@ -155,7 +155,12 @@ fn edit_external(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     };
     let to = crate::export::Destination { dir, exact: None };
-    crate::export::export_batch(s, &[id], &opts, &to, &mut write, &|path| Path::new(path).exists()).map_err(|e| bad(C, e))?;
+    // the copy becomes a library photo, not a rendition handed out: no VER sidecars beside it (`ver.record` makes its
+    // Record on request)
+    let sidecars = s.ver.prefs.export_sidecars.replace(false);
+    let done = crate::export::export_batch(s, &[id], &opts, &to, &mut write, &|path| Path::new(path).exists());
+    s.ver.prefs.export_sidecars = sidecars;
+    done.map_err(|e| bad(C, e))?;
     let out = written.into_iter().find(|w| w.ends_with(".tif")).ok_or_else(|| bad(C, "nothing was written"))?;
     let r = s.execute("library.import", &json!({"paths": [out]}))?;
     let new = r["imported"].get(0).and_then(Value::as_u64).ok_or_else(|| bad(C, "the edit copy could not be added"))?;
