@@ -1,0 +1,434 @@
+# LightCraft Describe lane: the keyword vocabulary.
+#
+# Format: "[facet] mode options prompt=\"template with {}\"", then one term per line. A term may list alternative
+# phrasings after " | "; those only build extra prompts for the same keyword. The keyword written to a photo is the term.
+# Terms are lower-case. No term names a person's gender, ethnicity, nationality, age bracket, religion, body or any other
+# personal attribute; people stay generic. Every keyword of the demo scenes must appear here exactly as spelled.
+# A term may appear once in the whole file.
+
+[subjects] multi max=8 prompt="This is a photo of {}."
+# landscape
+mountains | mountain range | snowy mountain peaks
+hills | rolling hills
+valley | a green valley
+canyon | a rocky canyon
+cliff | steep cliffs
+rock | rock face
+cave | a cave opening
+volcano
+glacier | a glacier
+ice | frozen ice
+snow | deep snow
+dunes | sand dunes
+sand | sandy ground
+meadow | a grassy meadow
+horizon | a distant horizon
+rock formation | sandstone rock formations
+island | a small island
+coastline | a rugged coastline
+# water
+lake | a still lake
+ocean | the open ocean
+sea | the sea
+river | a winding river
+waterfall | a waterfall
+stream | a small stream
+pond | a quiet pond
+waves | breaking waves
+reflection | a reflection in water
+lagoon | a turquoise lagoon
+ripples | ripples on water
+water drops | drops of water
+# sky
+sky | a wide sky
+clouds | fluffy clouds
+storm clouds | dark stormy clouds
+sunrise | the sun rising
+sunset | the sun setting
+rainbow
+stars | a field of stars
+starry sky | a night sky full of stars
+milky way | the milky way galaxy
+moon | the moon in the sky
+sun | the sun
+aurora | northern lights | green aurora curtains
+lightning | a bolt of lightning
+sunbeams | rays of sunlight
+# plants
+flower | a single flower
+flowers | a bunch of flowers
+wildflowers | wild flowers in a field
+lavender | lavender plants
+sunflowers
+cherry blossoms | blossoming branches
+tree | a lone tree
+trees | many trees
+pine trees | evergreen conifers
+palm trees
+leaves | green leaves
+autumn leaves | fallen leaves
+moss | moss on stone
+grass | blades of grass
+bamboo
+cactus | a cactus plant
+mushrooms | wild mushrooms
+vines | climbing vines
+branches | bare branches
+petals | flower petals
+# animals
+animal | a wild animal
+bird | a bird perched
+birds | a flock of birds
+eagle
+owl
+duck | ducks on water
+swan
+seagull | seagulls
+penguin | penguins
+dog | a pet dog
+cat | a pet cat
+horse | horses
+cow | cattle
+sheep | a flock of sheep
+goat
+deer | a deer in the wild
+fox
+bear
+wolf
+rabbit
+squirrel
+elephant | elephants
+giraffe
+zebra
+lion
+monkey
+whale
+dolphin | dolphins
+fish | fish swimming
+butterfly | a butterfly on a flower
+bee | a bee on a flower
+insect | a small insect
+turtle
+jellyfish
+# buildings and structures
+building | a building
+skyscraper | tall skyscrapers
+bridge | a bridge
+tower | a tall tower
+lighthouse
+castle | an old castle
+house | a house
+cottage | a small cottage
+barn | an old barn
+windmill
+door | a wooden door
+window | a window
+staircase | stairs
+arch | an archway
+columns | stone columns
+roof | rooftops
+balcony
+fence | a wooden fence
+wall | a brick wall
+facade | a building facade
+ruins | ancient ruins
+statue | a statue
+fountain
+pier | a wooden pier
+# vehicles
+car | a car on the road
+bicycle | a parked bicycle
+motorcycle
+bus
+truck
+train | a train
+airplane | an aeroplane in the sky
+boat | a small boat
+sailboat | a sailing boat
+ship | a large ship
+hot air balloon
+# food and drink
+food | a plate of food
+fruit | fresh fruit
+vegetables | fresh vegetables
+bread | a loaf of bread
+cake | a slice of cake
+coffee | a cup of coffee
+tea | a cup of tea
+pizza
+salad
+soup | a bowl of soup
+wine | a glass of wine
+cocktail
+dessert
+ice cream
+chocolate
+breakfast | a breakfast table
+# objects
+book | an open book
+books | a stack of books
+candle | a lit candle
+lantern
+clock
+bottle
+cup | a cup
+bowl | an empty bowl
+vase | a vase of flowers
+chair
+table
+lamp
+mirror
+umbrella
+guitar
+piano
+camera | a vintage camera
+flag
+basket
+bag
+bench | a park bench
+graffiti | street art
+tent | a camping tent
+campfire
+smoke
+neon sign
+# events
+wedding | a wedding celebration
+concert | a live concert
+festival | a crowded festival
+parade
+sports event | an athletic competition
+race | a race
+birthday party
+celebration | a party
+picnic
+fireworks | a fireworks display
+# people, generic only
+people | a few people
+person | a lone person
+crowd | a large crowd
+child | a child playing
+children | children
+portrait | a portrait of a person
+couple | a couple together
+group | a group of friends
+silhouette | a silhouette against the sky
+family
+
+[settings] multi max=2 prompt="This is a photo of {}."
+beach | a sandy beach
+forest | a dense forest
+rainforest
+jungle
+woodland | a woodland path
+desert | a desert landscape
+savanna
+tundra
+fields | open fields
+tropical | a tropical place
+countryside | the countryside
+farm
+vineyard
+orchard
+garden | a garden
+park | a city park
+botanical garden
+greenhouse
+playground
+campsite | a campsite
+lakeside
+riverbank
+seaside
+waterfront
+coast | a rocky coast
+underwater | an underwater scene
+coral reef
+wetland
+marsh
+hot spring
+polar landscape | an icy polar landscape
+snowfield
+ski slope
+badlands
+rice terraces
+trail | a hiking trail
+mountain pass
+alpine meadow
+sea cave
+cabin | a log cabin
+city street | a city street
+downtown | a busy downtown
+skyline | a city skyline
+old town | a historic old town
+village | a small village
+suburb
+alley | a narrow alley
+market | an open-air market
+plaza | a public square
+train station
+airport
+harbor | a harbor with boats
+highway
+country road
+boardwalk
+shopping street
+cafe | a cafe
+restaurant
+bar
+kitchen | a kitchen
+living room
+bedroom
+bathroom
+office | an office
+library | a library
+museum
+gallery | an art gallery
+theatre | a theatre
+stadium
+gym
+classroom
+factory
+warehouse
+workshop
+studio | a photo studio
+attic
+hotel lobby
+rooftop | a rooftop terrace
+parking lot
+construction site
+quarry
+farmyard
+stage
+
+[genre and technique] multi max=2 prompt="This is an example of {}."
+macro | a macro photograph
+close-up | a close-up photograph
+long exposure | a long exposure photograph
+panorama | a wide panoramic photograph
+aerial | an aerial photograph from above
+black and white | a black and white photograph
+bokeh | a photograph with blurred background lights
+high key | a bright high key photograph
+low key | a dark low key photograph
+still life | a still life photograph
+street photography | candid street photography
+landscape photography
+astrophotography
+wildlife photography
+architecture photography
+abstract | an abstract photograph
+minimalist | a minimalist photograph
+motion blur | a photograph with motion blur
+panning shot | a panning shot of a moving subject
+double exposure
+tilt-shift | a tilt-shift photograph
+wide angle | a wide angle photograph
+telephoto | a telephoto photograph
+documentary | a documentary photograph
+candid | a candid photograph
+product photography
+food photography
+night photography | a photograph taken at night with a long exposure
+flat lay | a flat lay arrangement seen from above
+pattern | a repeating pattern
+texture | a close view of texture
+symmetry | a symmetrical composition
+leading lines | a composition with leading lines
+negative space | a composition with lots of empty space
+low angle | a photograph from a low angle
+vintage | a vintage film photograph
+
+[light] multi max=1 prompt="This is a photo with {}."
+golden hour | golden hour lighting | warm evening light
+blue hour | blue hour lighting | deep blue twilight light
+backlit | backlighting | light shining from behind the subject
+overcast light | soft cloudy daylight
+harsh sunlight | hard midday sun
+soft light | soft diffused lighting
+rim light | a glowing edge of light
+window light | light from a window
+candlelight | warm candle light
+neon | colourful neon lighting
+dappled light | sunlight through leaves
+diffused light
+side light | light from the side
+spotlight | a bright spotlight
+studio lighting | studio flash lighting
+alpenglow | pink light on mountain peaks
+city lights | glowing city lights
+firelight | warm light from a fire
+moonlight | cold moon light
+lens flare | a sun flare in the lens
+long shadows | long dramatic shadows
+high contrast | strong contrast between light and dark
+low light | very dim light
+sunlit | bright sunlight on the subject
+glowing | a soft glow
+
+[colour] multi max=3 prompt="This is a photo dominated by {}."
+red | the colour red
+orange | the colour orange
+yellow | the colour yellow
+green | the colour green
+blue | the colour blue
+purple | the colour purple
+pink | the colour pink
+brown | the colour brown
+black | the colour black
+white | the colour white
+grey | the colour grey | gray
+pastel | pastel colours
+monochrome | a single colour
+warm tones | warm colours
+cool tones | cool colours
+vibrant colours | bright saturated colours
+muted colours | soft muted colours
+
+[mood] multi max=1 prompt="This photo feels {}."
+calm
+dramatic
+joyful | happy
+melancholic | sad and wistful
+tense
+serene
+playful
+mysterious
+romantic
+nostalgic
+lonely | solitary
+peaceful
+energetic | lively
+cozy | warm and homely
+majestic | grand and awe-inspiring
+whimsical
+eerie
+festive
+dreamy
+moody
+
+[weather] multi max=1 prompt="This is a photo in {} weather."
+fog | foggy
+mist | misty
+rain | rainy
+drizzle | drizzly
+snowfall | snowy
+storm | stormy
+wind | windy
+haze | hazy
+frost | frosty
+clear skies | clear | cloudless
+cloudy | gloomy grey
+sunny | bright and sunny
+
+[time of day] single margin=0.02 prompt="This is a photo taken at {}."
+dawn | the break of dawn | first light
+morning | the morning
+midday | noon under a high sun
+afternoon | the afternoon
+dusk | dusk after sunset | last light
+night | night in the dark
+
+[season] single margin=0.02 prompt="This is a photo taken in {}."
+spring | early spring
+summer | high summer
+autumn | fall
+winter | deep winter

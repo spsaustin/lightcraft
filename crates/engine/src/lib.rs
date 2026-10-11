@@ -190,8 +190,12 @@ pub struct Session {
     /// The loaded recognition model and the face embeddings made with it.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) faces: faces_index::FacesState,
-    /// Search and same-picture detection (`docs/vera.md`): picture digests, the keyword index, ignored pairs.
+    /// Search and same-picture detection (`docs/vera.md`): picture digests, the keyword index, ignored pairs, and the
+    /// vector lane's model and embeddings.
     pub(crate) vera: vera::State,
+    /// Where the host keeps VERA's SigLIP 2 model (`<models>/siglip2-base-patch32-256`; set by the app like
+    /// [`segment::Segmenter::dir`]). `None`: the vector lane has nowhere to keep a model.
+    pub vera_model_dir: Option<std::path::PathBuf>,
     /// Copied develop settings (partial JSON) for Paste.
     pub clipboard: Option<Value>,
     /// The folder on disk the [`LibrarySource::Folder`] view browses.
@@ -317,6 +321,7 @@ impl Session {
             #[cfg(not(target_arch = "wasm32"))]
             faces: Default::default(),
             vera: Default::default(),
+            vera_model_dir: None,
             clipboard: None,
             meta_clipboard: None,
             browse: None,

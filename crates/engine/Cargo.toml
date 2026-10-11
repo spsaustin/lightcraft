@@ -26,6 +26,8 @@ lightcraft-denoise = { workspace = true, optional = true }
 lightcraft-meta = { workspace = true }
 lightcraft-faces = { workspace = true }
 lightcraft-vera = { workspace = true }
+# VERA's vector lane: SigLIP 2 on candle natively (the web build compiles only its tokenizer and reports needs_desktop)
+lightcraft-embed = { workspace = true }
 miniz_oxide = { workspace = true }
 lightcraft-merge = { workspace = true }
 rayon = { workspace = true }

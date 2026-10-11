@@ -3132,6 +3132,7 @@ dependencies = [
  "lightcraft-denoise",
  "lightcraft-denoise-core",
  "lightcraft-develop",
+ "lightcraft-embed",
  "lightcraft-faces",
  "lightcraft-fetch",
  "lightcraft-geom",

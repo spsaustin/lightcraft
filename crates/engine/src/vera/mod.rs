@@ -8,9 +8,18 @@
 //!   decision kept outside the op log for now: it is not undoable and does not travel with a catalog export.
 //! - The background pump (`vera.pump`): a few digests per frame on the session thread, with a row in the activity stack.
 //! - The import check: files about to be imported are compared with the library's digests ([`NearCheck`]).
+//! - The vector lane ([`lane`], Phase 2): SigLIP 2 embeddings of every picture ([`embeddings`], made off the session
+//!   thread by [`worker`]), fused with the keyword lane in `search.text`, read by `photo.similar` and by the `similar`
+//!   tier of `photo.duplicates`; the model is downloaded on request (`vera.model.*`, [`model`]).
 
 pub(crate) mod commands;
 pub(crate) mod digests;
+pub(crate) mod embeddings;
+pub(crate) mod lane;
+pub(crate) mod model;
+pub(crate) mod vocabulary;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) mod worker;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -48,6 +57,15 @@ const MAX_CANDIDATE_CACHE: usize = 20_000;
 /// The keyword lane's fields, in the order [`fields`] gives them, and their weights: title, keywords, caption, alt
 /// text, extended description, file stem, camera + lens + place.
 pub(crate) const FIELD_WEIGHTS: [f32; 7] = [3.0, 2.5, 1.5, 1.0, 0.5, 1.0, 0.5];
+
+/// VERA's preferences, saved with the library (`prefs.json` → `vera`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub(crate) struct Prefs {
+    /// Whether the vector lane runs (`None`: the default, on once the model is installed).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vector_lane: Option<bool>,
+}
 
 /// How hard the background pump may work now (the app says, from what the user is doing).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -123,12 +141,16 @@ pub(crate) struct State {
     digested_known: usize,
     /// Import candidates' digests, by (path, file size).
     pub candidates: HashMap<(String, u64), Digest>,
+    /// The vector lane: the model, the library's embeddings, their pump.
+    pub lane: lane::Lane,
 }
 
 impl State {
-    /// Another library was opened: what was learned is saved (dropping the store writes it) and nothing carries over.
+    /// Another library was opened: what was learned is saved (dropping the stores writes them) and nothing carries over
+    /// but the vector lane's model (the same whatever library is open).
     pub fn library_changed(&mut self) {
-        *self = State::default();
+        let lane = self.lane.library_changed();
+        *self = State { lane, ..State::default() };
     }
 }
 
@@ -149,12 +171,20 @@ pub(crate) fn ensure_open(s: &mut Session) {
         return;
     }
     let digests_path = dir.as_ref().map(|d| d.join(digests::FILE_NAME));
-    if s.vera.digests.path() != digests_path.as_deref() {
+    let embeddings_path = dir.as_ref().map(|d| d.join(embeddings::file_name(lane::MODEL_ID)));
+    let digests_moved = s.vera.digests.path() != digests_path.as_deref();
+    let embeddings_moved = s.vera.lane.store.path() != embeddings_path.as_deref();
+    if digests_moved || embeddings_moved {
         let live: HashSet<String> = s.catalog.photos().map(|p| content_key(p)).collect();
-        s.vera.digests.reset(digests_path, Some(&live));
-        s.vera.skipped.clear();
-        s.vera.queue.clear();
-        s.vera.queue_stamp = None;
+        if digests_moved {
+            s.vera.digests.reset(digests_path, Some(&live));
+            s.vera.skipped.clear();
+            s.vera.queue.clear();
+            s.vera.queue_stamp = None;
+        }
+        if embeddings_moved {
+            lane::open_store(s, dir.as_deref(), &live);
+        }
     }
     let ignored_path = dir.as_ref().map(|d| d.join(IGNORED_FILE));
     if s.vera.ignored.path() != ignored_path.as_deref() {
@@ -299,12 +329,15 @@ pub(crate) fn pump(s: &mut Session, pace: Pace) -> Value {
     }
     let pending = s.vera.pending_known;
     save_if_due(s, pending);
+    let embedding = lane::pump(s, pace);
+    let embedding_active = embedding["pending"].as_u64().is_some_and(|n| n > 0);
     json!({
-        "active": pending > 0,
+        "active": pending > 0 || embedding_active,
         "pending": pending,
         "digested": s.vera.digested_known,
         "photos": s.vera.photos_known,
         "pace": pace.name(),
+        "embedding": embedding,
     })
 }
 
@@ -535,3 +568,5 @@ impl IgnoredPairs {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_lane;

@@ -64,11 +64,18 @@ pub fn background(n: usize, seed: u64, vector: impl Fn(usize) -> Option<Vec<f32>
         let (Some(a), Some(b)) = (vector(i), vector(j)) else {
             continue;
         };
-        let c = cosine(&a, &b);
-        if c.is_finite() {
-            cosines.push(c);
-        }
+        cosines.push(cosine(&a, &b));
     }
+    background_from_scores(&cosines, n, seed)
+}
+
+/// The background statistic over any population of cosines: the lower half's median is the mean,
+/// its median absolute deviation times [`TAIL_MAD_TO_SIGMA`] the sigma. [`background`] feeds it
+/// random pairs of a space; a query feeds it its own cosines against every vector, which is the
+/// right population when the query lives on another scale than the space's pairs (a text query
+/// against image vectors). `None` under two finite scores.
+pub fn background_from_scores(scores: &[f32], n_at_compute: usize, seed: u64) -> Option<Background> {
+    let mut cosines: Vec<f32> = scores.iter().copied().filter(|c| c.is_finite()).collect();
     if cosines.len() < 2 {
         return None;
     }
@@ -82,7 +89,7 @@ pub fn background(n: usize, seed: u64, vector: impl Fn(usize) -> Option<Vec<f32>
     if !sigma.is_finite() || sigma <= 0.0 {
         sigma = SIGMA_FLOOR;
     }
-    Some(Background { mean, sigma, n_at_compute: n, seed })
+    Some(Background { mean, sigma, n_at_compute, seed })
 }
 
 /// Smallest sigma a background may have, so the ceiling is still defined for a space of identical
@@ -125,6 +132,20 @@ pub fn apply(scored: &mut Vec<(u64, f32)>, bg: &Background, candidates: usize) -
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn background_from_scores_reads_the_lower_half() {
+        // ten background scores around 0.1 and two hits near 0.9: the hits never move the statistic
+        let scores = [0.08, 0.1, 0.12, 0.09, 0.11, 0.1, 0.13, 0.07, 0.1, 0.1, 0.9, 0.88];
+        let bg = background_from_scores(&scores, 12, 7).unwrap();
+        assert!((bg.mean - 0.09).abs() < 0.02, "{bg:?}");
+        assert!(bg.sigma > 0.0 && bg.sigma < 0.1, "{bg:?}");
+        assert_eq!((bg.n_at_compute, bg.seed), (12, 7));
+        let c = ceiling(&bg, 12);
+        assert!(c > 0.13 && c < 0.9, "the hits clear the ceiling, the background does not: {c}");
+        assert!(background_from_scores(&[0.5], 1, 0).is_none());
+        assert!(background_from_scores(&[f32::NAN, 0.5, f32::INFINITY], 3, 0).is_none());
+    }
 
     const DIMS: usize = 64;
 

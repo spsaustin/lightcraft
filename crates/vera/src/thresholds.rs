@@ -31,13 +31,21 @@ pub const CROP_PDQ_MEASURED: u32 = 140;
 /// Bits of slack the cross-check allows between this implementation and the studio's measurement.
 pub const CROP_PDQ_TOLERANCE: u32 = 8;
 
+/// The embedding model the two cosine thresholds below were measured against. Cosine scales do
+/// not carry across models: a different model re-measures them before they are trusted.
+pub const EMBED_THRESHOLDS_MODEL: &str = "siglip2-base-patch32-256";
 /// Cosine between two frames' image embeddings at or over which they are **duplicates** (the same
-/// picture by the model's eye). Measured on `siglip2-so400m-patch14-384`: every true pair clears
-/// it, every unrelated pair stays under.
-pub const EMBED_DUPLICATE: f32 = 0.82;
-/// Cosine at or over which two frames are **near** duplicates, worth showing: where the measured
-/// unrelated population (one photographer's work, so already alike) tops out.
-pub const EMBED_NEAR: f32 = 0.78;
+/// picture by the model's eye). Measured on `siglip2-base-patch32-256` with the fixture scenes
+/// (`crates/embed/tests/thresholds.rs`, the engine's Gate 2 tests): every resize pair 0.976–0.999,
+/// a JPEG at quality 85 0.985, at quality 50 0.9475, a 70 % centre crop 0.9677 (the crop the
+/// digests miss, caught here). 0.94 sits under the weakest true pair. The studio's so400m value
+/// was 0.82; this model's cosines run higher across the board.
+pub const EMBED_DUPLICATE: f32 = 0.94;
+/// Cosine at or over which two frames are **near** duplicates, worth showing: above the most
+/// alike pair of unrelated fixture scenes (0.853, two water-and-sky landscapes) with margin, and
+/// far above their typical 0.55–0.75. A real catalog of one photographer's work sits closer
+/// together than procedural scenes do, so this is the value to re-check first on real photos.
+pub const EMBED_NEAR: f32 = 0.90;
 
 /// Reciprocal rank fusion's constant, from Cormack, Clarke & Büttcher (2009): large enough that the
 /// first few ranks do not dominate, small enough that rank still matters.
